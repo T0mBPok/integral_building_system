@@ -1,4 +1,4 @@
-from src.user.models import User
+from backend.src.user.model import User
 from src.dao.base import BaseDAO
 
 class UserDAO(BaseDAO):
