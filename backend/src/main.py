@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from src.exceptions import TokenExpiredException, TokenNoFoundException
 from src.user.router import router as users_router
+from src.indicator.router import router as indicators_router
 
 app = FastAPI(title='IBS')
 PORT = 9000
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(users_router)
+app.include_router(indicators_router)
 
 
 @app.exception_handler(TokenExpiredException)
