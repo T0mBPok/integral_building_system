@@ -16,6 +16,8 @@ from src.user.model import User
 from src.module.model import Module
 from src.indicator.model import Indicator
 from src.project.model import Project
+from src.function.model import Function
+from src.level.model import Level
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

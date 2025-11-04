@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 from src.exceptions import TokenExpiredException, TokenNoFoundException
 from src.user.router import router as users_router
 from src.indicator.router import router as indicators_router
+from src.function.router import router as function_router
+from src.project.router import router as project_router
 
 app = FastAPI(title='IBS')
 PORT = 9000
@@ -22,6 +23,8 @@ app.add_middleware(
 
 app.include_router(users_router)
 app.include_router(indicators_router)
+app.include_router(function_router)
+app.include_router(project_router)
 
 
 @app.exception_handler(TokenExpiredException)
