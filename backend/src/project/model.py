@@ -10,3 +10,4 @@ class Project(Base):
     description: Mapped[str]
     
     user: Mapped["User"] = relationship("User")
+    levels: Mapped[list["Level"]] = relationship("Level", back_populates='project', cascade='all, delete-orphan')

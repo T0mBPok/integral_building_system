@@ -1,16 +1,26 @@
 from pydantic import BaseModel, Field
+from typing import Optional, List
+
+class LevelShort(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
 
 class BaseProject(BaseModel):
-    name: str = Field(..., description="Название проекта", example="load_avg")
-    description: str = Field(..., description="Значение проекта", example=75)
+    name: str = Field(..., description="Название проекта", example="Проект X")
+    description: str = Field(..., description="Описание проекта", example="Проект для анализа производительности")
 
 
 class GetProject(BaseProject):
     id: int
-    user_id: int = Field(..., description="ID модуля, к которому относится проект")
+    user_id: int = Field(..., description="ID пользователя, которому принадлежит проект")
+    levels: Optional[List[LevelShort]] = None
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
 
 
 class AddProject(BaseProject):
@@ -21,5 +31,5 @@ class AddProject(BaseProject):
 
 
 class UpdateProject(BaseModel):
-    name: str | None = None
-    description: str | None = None
+    name: Optional[str] = None
+    description: Optional[str] = None

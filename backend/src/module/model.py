@@ -6,6 +6,6 @@ class Module(Base):
     id: Mapped[int_pk]
     name: Mapped[str_uniq]
     value: Mapped[int]
-    level_id: Mapped[int] = ForeignKey('levels.id', ondelete="CASCADE")
+    level_id: Mapped[int] = mapped_column(ForeignKey('levels.id', ondelete="CASCADE"))
     
     level: Mapped['Level'] = relationship('Level', back_populates='modules')

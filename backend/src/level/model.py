@@ -11,6 +11,6 @@ class Level(Base):
     number: Mapped[int]
     function_id: Mapped[int|None]
     
-    project: Mapped["Project"] = relationship("Project")
+    project: Mapped["Project"] = relationship("Project", back_populates='levels')
     modules: Mapped[list['Module']] = relationship("Module", back_populates='level')
     function: Mapped["Function"] = relationship('Function', back_populates='level')

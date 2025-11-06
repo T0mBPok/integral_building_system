@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field
 
 class BaseFunction(BaseModel):
-    module_id: int = Field(..., description="ID модуля, к которому относится индикатор")
-    name: str = Field(..., description="Название индикатора", example="load_avg")
+    level_id: int = Field(..., description="ID уровня")
+    name: str = Field(..., description="Название функции", example="load_avg")
     expression: str = Field(..., description="Функция")
 
 
@@ -15,12 +15,12 @@ class GetFunction(BaseFunction):
 
 class AddFunction(BaseFunction):
     @classmethod
-    def as_form(cls, module_id: int, name: str, expression: int):
+    def as_form(cls, level_id: int, name: str, expression: int):
         """Позволяет использовать Depends(AddFunction.as_form)"""
-        return cls(module_id=module_id, name=name, value=expression)
+        return cls(level_id=level_id, name=name, expression=expression)
 
 
 class UpdateFunction(BaseModel):
-    module_id: int | None = None
+    level_id: int | None = None
     name: str | None = None
     expression: int | None = None
