@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, HTTPException
+from fastapi import APIRouter, Depends, Path, Response, HTTPException
 from fastapi.responses import JSONResponse
 from src.user.schemas import SUserRegister, SUserAuth, SUser
 from src.user.logic import UserLogic

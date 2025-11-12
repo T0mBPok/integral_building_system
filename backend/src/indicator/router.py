@@ -10,7 +10,7 @@ async def get_indicators(request: RBIndicator = Depends()):
     return await IndicatorLogic.get(**request.to_dict())
 
 @router.get("/{id}", response_model=GetIndicator)
-async def get_indicator_by_id(id: str):
+async def get_indicator_by_id(id: str = Path(...)):
     indicator = await IndicatorLogic.get_one_or_none_by_id(id=id)
     if not indicator:
         raise HTTPException(status_code=404, detail="Индикатор не найден")
@@ -21,11 +21,11 @@ async def add_indicator(data: AddIndicator):
     return await IndicatorLogic.add(**data.model_dump())
 
 @router.put("/{id}", response_model=GetIndicator)
-async def update_indicator(id: str, data: UpdateIndicator):
+async def update_indicator(data: UpdateIndicator, id: str = Path(...)):
     await IndicatorLogic.update(id=id, **data.model_dump(exclude_unset=True))
     return await IndicatorLogic.get_one_or_none_by_id(id=id)
 
 @router.delete("/{id}")
-async def delete_indicator(id: str):
+async def delete_indicator(id: str = Path(...)):
     await IndicatorLogic.delete(id=id)
     return {"message": f"Индикатор с id={id} успешно удалён"}
