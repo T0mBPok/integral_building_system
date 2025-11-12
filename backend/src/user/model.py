@@ -1,8 +1,10 @@
-from src.database import int_pk, Base
-from sqlalchemy.orm import Mapped, mapped_column
+from beanie import Document
+from pydantic import EmailStr
 
-class User(Base):
-    id: Mapped[int_pk]
-    username: Mapped[str]
-    hashed_password: Mapped[str]
-    email: Mapped[str] = mapped_column(unique=True)
+class User(Document):
+    username: str
+    password: str
+    email: EmailStr
+
+    class Settings:
+        name = "users"

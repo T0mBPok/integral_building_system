@@ -1,29 +1,31 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from src.function.schemas import GetFunction, AddFunction, UpdateFunction
 from src.function.rb import RBFunction
 from src.function.logic import FunctionLogic
 
 router = APIRouter(prefix="/function", tags=["Работа с функциями"])
 
-@router.get("/", summary="Получить список функций", response_model=list[GetFunction])
-async def get_functions(request_body: RBFunction = Depends()):
-    return await FunctionLogic.get(**request_body.to_dict())
+@router.get("/", response_model=list[GetFunction])
+async def get_functions(request: RBFunction = Depends()):
+    return await FunctionLogic.get(**request.to_dict())
 
-@router.get("/{id}", summary="Получить функцию по ID", response_model=GetFunction)
-async def get_function_by_id(id: int = Path(..., gt=0)):
+@router.get("/{id}", response_model=GetFunction)
+async def get_function_by_id(id: str):
+    func = await FunctionLogic.get_one_or_none_by_id(id=id)
+    if not func:
+        raise HTTPException(status_code=404, detail="Функция не найдена")
+    return func
+
+@router.post("/", response_model=GetFunction)
+async def add_function(data: AddFunction):
+    return await FunctionLogic.add(**data.model_dump())
+
+@router.put("/{id}", response_model=GetFunction)
+async def update_function(id: str, data: UpdateFunction):
+    await FunctionLogic.update(id=id, **data.model_dump(exclude_unset=True))
     return await FunctionLogic.get_one_or_none_by_id(id=id)
 
-@router.post("/", summary="Добавить функцию", response_model=GetFunction)
-async def add_function(form_data: AddFunction = Depends(AddFunction.as_form)):
-    return await FunctionLogic.add(**form_data.model_dump())
-
-@router.delete("/{id}", summary="Удалить функцию")
-async def delete_function(id: int = Path(..., gt=0)):
+@router.delete("/{id}")
+async def delete_function(id: str):
     await FunctionLogic.delete(id=id)
-    return {"message": f"Функция с id={id} успешно удалена!"}
-
-@router.put("/{id}", summary="Обновить функцию", response_model=GetFunction)
-async def update_function(function: UpdateFunction, id: int = Path(..., gt=0)):
-    new_data = function.model_dump(exclude_unset=True)
-    await FunctionLogic.update_function(id=id, **new_data)
-    return new_data
+    return {"message": f"Функция с id={id} успешно удалена"}

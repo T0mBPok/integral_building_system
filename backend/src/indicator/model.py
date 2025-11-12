@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Mapped
-from src.database import Base, str_uniq, int_pk
+from beanie import Document
 
-class Indicator(Base):
-    id: Mapped[int_pk]
-    name: Mapped[str_uniq]
-    value: Mapped[int]
+class Indicator(Document):
+    name: str
+    value: int
+
+    class Settings:
+        name = "indicators"

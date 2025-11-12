@@ -1,8 +1,8 @@
 # src/level/schema.py
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from src.module.schema import GetModule
-from src.function.schema import GetFunction
+from src.module.schemas import GetModule
+from src.function.schemas import GetFunction
 
 
 class BaseLevel(BaseModel):

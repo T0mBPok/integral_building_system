@@ -1,34 +1,31 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from src.level.schemas import GetLevel, AddLevel, UpdateLevel
 from src.level.rb import RBLevel
 from src.level.logic import LevelLogic
 
 router = APIRouter(prefix="/level", tags=["Работа с уровнями"])
 
+@router.get("/", response_model=list[GetLevel])
+async def get_levels(request: RBLevel = Depends()):
+    return await LevelLogic.get(**request.to_dict())
 
-@router.get("/", summary="Получить список уровней", response_model=list[GetLevel])
-async def get_levels(request_body: RBLevel = Depends()):
-    return await LevelLogic.get(**request_body.to_dict())
+@router.get("/{id}", response_model=GetLevel)
+async def get_level_by_id(id: str):
+    level = await LevelLogic.get_one_or_none_by_id(id=id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Уровень не найден")
+    return level
 
+@router.post("/", response_model=GetLevel)
+async def add_level(data: AddLevel):
+    return await LevelLogic.add(**data.model_dump())
 
-@router.get("/{id}", summary="Получить уровень по ID", response_model=GetLevel)
-async def get_level_by_id(id: int = Path(..., gt=0)):
+@router.put("/{id}", response_model=GetLevel)
+async def update_level(id: str, data: UpdateLevel):
+    await LevelLogic.update(id=id, **data.model_dump(exclude_unset=True))
     return await LevelLogic.get_one_or_none_by_id(id=id)
 
-
-@router.post("/", summary="Добавить уровень", response_model=GetLevel)
-async def add_level(form_data: AddLevel = Depends(AddLevel.as_form)):
-    return await LevelLogic.add(**form_data.model_dump())
-
-
-@router.put("/{id}", summary="Обновить уровень", response_model=GetLevel)
-async def update_level(level: UpdateLevel, id: int = Path(..., gt=0)):
-    new_data = level.model_dump(exclude_unset=True)
-    await LevelLogic.update(id=id, **new_data)
-    return await LevelLogic.get_one_or_none_by_id(id=id)
-
-
-@router.delete("/{id}", summary="Удалить уровень")
-async def delete_level(id: int = Path(..., gt=0)):
+@router.delete("/{id}")
+async def delete_level(id: str):
     await LevelLogic.delete(id=id)
-    return {"message": f"Уровень с id={id} успешно удалён!"}
+    return {"message": f"Уровень с id={id} успешно удалён"}
