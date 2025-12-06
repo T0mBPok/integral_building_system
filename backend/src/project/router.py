@@ -11,7 +11,7 @@ async def get_projects(request: RBProject = Depends(), user=Depends(get_current_
     return await ProjectLogic.get(**request.to_dict())
 
 @router.get("/{id}", response_model=GetProject)
-async def get_project_by_id(id: str = Path(...)):
+async def get_project_by_id(id: str = Path(...), user=Depends(get_current_user)):
     project = await ProjectLogic.get_one_or_none_by_id(id=id)
     if not project:
         raise HTTPException(status_code=404, detail="Проект не найден")
@@ -19,14 +19,14 @@ async def get_project_by_id(id: str = Path(...)):
 
 @router.post("/", response_model=GetProject)
 async def add_project(form: AddProject = Depends(AddProject.as_form), user=Depends(get_current_user)):
-    return await ProjectLogic.add(**form.model_dump(), user_id=user.id)
+    return await ProjectLogic.add(**form.model_dump(), user=user)
 
 @router.put("/{id}", response_model=GetProject)
-async def update_project(data: UpdateProject, id: str = Path(...)):
-    await ProjectLogic.update(id=id, **data.model_dump(exclude_unset=True))
+async def update_project(data: UpdateProject, id: str = Path(...), user=Depends(get_current_user)):
+    await ProjectLogic.update(id=id, **data.model_dump(exclude_unset=True), user=user)
     return await ProjectLogic.get_one_or_none_by_id(id=id)
 
 @router.delete("/{id}")
-async def delete_project(id: str = Path(...)):
+async def delete_project(id: str = Path(...), user=Depends(get_current_user)):
     await ProjectLogic.delete(id=id)
     return {"message": f"Проект с id={id} удалён"}

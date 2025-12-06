@@ -1,26 +1,21 @@
-from pydantic import BaseModel, Field
+from src.schemas.base import MongoBaseModel
+from pydantic import BaseModel
 
-class BaseFunction(BaseModel):
-    level_id: int = Field(..., description="ID уровня")
-    name: str = Field(..., description="Название функции", example="load_avg")
-    expression: str = Field(..., description="Функция")
-
+class BaseFunction(MongoBaseModel):
+    name: str
+    expression: str
 
 class GetFunction(BaseFunction):
-    id: int
-
     class Config:
-        from_attributes = True 
+        from_attributes = True
 
-
-class AddFunction(BaseFunction):
+class AddFunction(BaseModel):
+    name: str
+    expression: str
     @classmethod
-    def as_form(cls, level_id: int, name: str, expression: int):
-        """Позволяет использовать Depends(AddFunction.as_form)"""
-        return cls(level_id=level_id, name=name, expression=expression)
+    def as_form(cls, name: str, expression: str):
+        return cls(name=name, expression=expression)
 
-
-class UpdateFunction(BaseModel):
-    level_id: int | None = None
+class UpdateFunction(MongoBaseModel):
     name: str | None = None
-    expression: int | None = None
+    expression: str | None = None

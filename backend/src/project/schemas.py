@@ -1,35 +1,31 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import Field, BaseModel
+from typing import List
+from src.schemas.base import MongoBaseModel
 
-class LevelShort(BaseModel):
-    id: int
+class LevelShort(MongoBaseModel):
+    id: str
     name: str
 
     class Config:
         from_attributes = True
 
-
-class BaseProject(BaseModel):
-    name: str = Field(..., description="Название проекта", example="Проект X")
-    description: str = Field(..., description="Описание проекта", example="Проект для анализа производительности")
-
+class BaseProject(MongoBaseModel):
+    name: str = Field(..., description="Название проекта")
+    description: str = Field(..., description="Описание проекта")
 
 class GetProject(BaseProject):
-    id: int
-    user_id: int = Field(..., description="ID пользователя, которому принадлежит проект")
-    levels: Optional[List[LevelShort]] = None
+    levels: list[LevelShort] | None = None
 
     class Config:
         from_attributes = True
 
-
-class AddProject(BaseProject):
+class AddProject(BaseModel):
+    name: str | None = None
+    description: str | None = None
     @classmethod
     def as_form(cls, name: str, description: str):
-        """Позволяет использовать Depends(AddProject.as_form)"""
         return cls(name=name, description=description)
 
-
-class UpdateProject(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+class UpdateProject(MongoBaseModel):
+    name: str | None = None
+    description: str | None = None

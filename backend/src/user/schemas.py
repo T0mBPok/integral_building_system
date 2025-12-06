@@ -1,23 +1,19 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field, BaseModel
+from src.schemas.base import MongoBaseModel
 
-
-class SUserRegister(BaseModel):
+class SUserRegister(MongoBaseModel):
     email: EmailStr
     username: str
-    hashed_password: str
-    class Config:
-        from_attributes = True 
-
-class SUserRegister(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=5, max_length=50, description='Пароль от 5 до 50 символов')
-    username: str = Field(..., min_length=3, max_length=20, description="Имя от 3 до 20 символов")
+    password: str = Field(..., min_length=5, max_length=50)
     
 class SUserAuth(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=5, max_length=50)
     
-class SUser(BaseModel):
-    id: int
+class SUser(MongoBaseModel):
+    id: str
     email: EmailStr
     username: str
+
+    class Config:
+        from_attributes = True

@@ -1,5 +1,5 @@
 from src.dao.base import BaseDAO
-from src.module.model import Module
+from src.indicator.model import Indicator
 
 class IndicatorDAO(BaseDAO):
-    model = Module
+    model = Indicator

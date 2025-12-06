@@ -1,10 +1,8 @@
-from beanie import Document, Link
-from src.level.model import Level
+from beanie import Document, Indexed, Link
 
 class Function(Document):
-    name: str
-    expression: str
-    level: Link[Level] | None = None
+    name: str = Indexed(unique=True) 
+    expression: str = Indexed(unique=True)
 
     class Settings:
         name = "functions"

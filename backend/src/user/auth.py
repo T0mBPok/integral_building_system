@@ -33,7 +33,7 @@ async def authenticate_user(email: EmailStr, password: str):
     if not user:
         return None
 
-    if not verify_password(plain_pass=password, hashed_password=user.hashed_password):
+    if not verify_password(plain_pass=password, hashed_password=user.password):
         return None
 
     return user

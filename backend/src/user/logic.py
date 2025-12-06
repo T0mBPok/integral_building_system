@@ -1,5 +1,5 @@
 from src.user.dao import UserDAO
-from src.exceptions import UserAlreadyExistsException, PasswordMismatchException, IncorrectEmailOrPasswordException
+from src.exceptions import UserAlreadyExistsException,  IncorrectEmailOrPasswordException
 from src.user.auth import get_pass_hashed, authenticate_user, create_token
 
 
