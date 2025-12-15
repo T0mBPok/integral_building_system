@@ -1,0 +1,52 @@
+.panel {
+  background: var(--bg-panel);
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: var(--radius-panel);
+}
+
+.panel h3 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.panel label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.panel input,
+.panel textarea,
+.panel select {
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  field-sizing: content;
+}
+
+.panel textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.row-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.name-input {
+  flex: 1;
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,77 @@
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+/* внутренний слой, который масштабируем/двигаем */
+.canvas-inner {
+  position: relative;
+  width: 1600px;   /* виртуальное поле */
+  height: 900px;
+  margin: auto;
+}
+
+/* уровни */
+.level {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+}
+
+.level {
+  top: 120px;
+}
+
+.level.bottom {
+  top: 320px;
+  gap: 140px;
+}
+
+/* узлы */
+.node-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.node {
+  min-width: 120px;
+  padding: 10px 22px;
+  background: var(--bg-node);
+  border-radius: var(--radius-node);
+  text-align: center;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.node.aggregate {
+  background: var(--bg-node-dark);
+}
+
+/* вес */
+.weight {
+  background: #bfbfbf;
+  border-radius: 10px;
+  font-size: 12px;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+}
+
+/* линии */
+.connections {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.connections line {
+  stroke: var(--line-color);
+  stroke-width: 1.2;
+}

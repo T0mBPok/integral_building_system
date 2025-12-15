@@ -1,0 +1,27 @@
+:root {
+  --bg-main: #efefef;
+  --bg-panel: #f3f3f3;
+  --bg-node: #d9d9d9;
+  --bg-node-dark: #bfbfbf;
+
+  --border-light: #e0e0e0;
+  --text-main: #222;
+  --text-muted: #666;
+
+  --radius-node: 14px;
+  --radius-panel: 10px;
+  --radius-btn: 8px;
+
+  --line-color: #9a9a9a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-main);
+}

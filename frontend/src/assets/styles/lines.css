@@ -1,0 +1,10 @@
+.connections {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.connections line {
+  stroke: var(--line-color);
+  stroke-width: 1.4;
+}

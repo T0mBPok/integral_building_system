@@ -1,0 +1,55 @@
+.editor-layout {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr 320px; /* канвас + правая панель */
+}
+
+/* левая часть с канвазом */
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+/* правая панель */
+.right-panel {
+  border-left: 1px solid var(--border-light);
+  background: var(--bg-panel);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* нижнее меню-капсула */
+.bottom-menu {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+}
+
+.bottom-menu button {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.bottom-menu button.active {
+  background: #ffffff;
+  color: var(--text-main);
+  box-shadow: 0 0 0 1px var(--border-light);
+}
