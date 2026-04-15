@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Path, Response, HTTPException
 from fastapi.responses import JSONResponse
+from src.config import get_cookie_settings
 from src.user.schemas import SUserRegister, SUserAuth, SUser
 from src.user.logic import UserLogic
 from src.user.dependencies import get_current_user
@@ -28,6 +29,7 @@ async def get_user_list(user: SUser = Depends(get_current_user)):
 @router.post("/login/")
 async def auth_user(response: Response, user_data: SUserAuth):
     access_token = await UserLogic.auth(user_data)
+    cookie_settings = get_cookie_settings()
     res = JSONResponse(content={
         'ok': True,
         'access_token': access_token,
@@ -37,8 +39,8 @@ async def auth_user(response: Response, user_data: SUserAuth):
         key='access_user_token',
         value=access_token,
         httponly=True,
-        secure=True,
-        samesite='None',
+        secure=cookie_settings["secure"],
+        samesite=cookie_settings["samesite"],
         max_age=3600
     )
     return res

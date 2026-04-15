@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+from pydantic import Field
 
 class Settings(BaseSettings):
     MONGO_HOST: str
@@ -10,6 +11,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str
     COMPOSE_PROJECT_NAME: str
+    COOKIE_SECURE: bool = Field(default=False)
+    COOKIE_SAMESITE: str = Field(default="lax")
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"),
@@ -23,3 +26,10 @@ def get_mongo_uri():
 
 def get_auth_data():
     return {"secret_key": settings.SECRET_KEY, "algorithm": settings.ALGORITHM}
+
+
+def get_cookie_settings():
+    return {
+        "secure": settings.COOKIE_SECURE,
+        "samesite": settings.COOKIE_SAMESITE,
+    }

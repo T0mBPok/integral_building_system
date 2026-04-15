@@ -1,32 +1,57 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
-from src.project.schemas import GetProject, AddProject, UpdateProject
-from src.project.rb import RBProject
+from fastapi import APIRouter, Depends, Path
+
 from src.project.logic import ProjectLogic
+from src.project.schemas import (
+    AddProject,
+    GetProject,
+    ProjectCalculateRequest,
+    ProjectIndicatorAttachRequest,
+    UpdateProject,
+)
 from src.user.dependencies import get_current_user
 
 router = APIRouter(prefix="/project", tags=["Работа с проектами"])
 
+
 @router.get("/", response_model=list[GetProject])
-async def get_projects(request: RBProject = Depends(), user=Depends(get_current_user)):
-    return await ProjectLogic.get(**request.to_dict())
+async def get_projects(user=Depends(get_current_user)):
+    return await ProjectLogic.list_for_user(user)
+
 
 @router.get("/{id}", response_model=GetProject)
 async def get_project_by_id(id: str = Path(...), user=Depends(get_current_user)):
-    project = await ProjectLogic.get_one_or_none_by_id(id=id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Проект не найден")
-    return project
+    return await ProjectLogic.get_for_user(user, id)
+
 
 @router.post("/", response_model=GetProject)
-async def add_project(form: AddProject = Depends(AddProject.as_form), user=Depends(get_current_user)):
-    return await ProjectLogic.add(**form.model_dump(), user=user)
+async def add_project(data: AddProject, user=Depends(get_current_user)):
+    return await ProjectLogic.create_for_user(user, data)
+
 
 @router.put("/{id}", response_model=GetProject)
 async def update_project(data: UpdateProject, id: str = Path(...), user=Depends(get_current_user)):
-    await ProjectLogic.update(id=id, **data.model_dump(exclude_unset=True), user=user)
-    return await ProjectLogic.get_one_or_none_by_id(id=id)
+    return await ProjectLogic.update_for_user(user, id, data)
+
+
+@router.post("/{id}/indicators", response_model=GetProject)
+async def attach_indicator(
+    data: ProjectIndicatorAttachRequest,
+    id: str = Path(...),
+    user=Depends(get_current_user),
+):
+    return await ProjectLogic.attach_indicator(user, id, data)
+
+
+@router.post("/{id}/calculate", response_model=GetProject)
+async def calculate_project(
+    data: ProjectCalculateRequest,
+    id: str = Path(...),
+    user=Depends(get_current_user),
+):
+    return await ProjectLogic.calculate_for_user(user, id, data)
+
 
 @router.delete("/{id}")
 async def delete_project(id: str = Path(...), user=Depends(get_current_user)):
-    await ProjectLogic.delete(id=id)
+    await ProjectLogic.delete_for_user(user, id)
     return {"message": f"Проект с id={id} удалён"}
