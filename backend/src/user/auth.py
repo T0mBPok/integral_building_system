@@ -5,6 +5,7 @@ from jose import jwt
 from passlib.context import CryptContext
 from src.user.dao import UserDAO
 
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def create_token(data: dict):
@@ -19,14 +20,12 @@ def create_token(data: dict):
     )
     return encoded_jwt
 
-
 def get_pass_hashed(password: str) -> str:
     return pwd_context.hash(password)
 
 
 def verify_password(plain_pass: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_pass, hashed_password)
-
 
 async def authenticate_user(email: EmailStr, password: str):
     user = await UserDAO.get_one_or_none(email=email)

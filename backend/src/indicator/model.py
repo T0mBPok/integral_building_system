@@ -4,7 +4,7 @@ from src.user.model import User
 class Indicator(Document):
     name: str = Indexed(unique=True) 
     value: int
-    user: Link["User"]
+    user: Link[User]
 
     class Settings:
         name = "indicators"

@@ -5,5 +5,5 @@ from src.user.model import User
 class IndicatorLogic(IndicatorDAO):
     @classmethod
     async def indicator_add(cls, user: User, data: dict):
-        data["user"] = Link(user)
-        return await super().add(**data)
+        data["user"] = Link[User](user)
+        return await cls.add(**data)

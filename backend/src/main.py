@@ -31,10 +31,10 @@ app.add_middleware(
 )
 
 app.include_router(users_router)
-app.include_router(indicators_router)
-app.include_router(function_router)
 app.include_router(project_router)
+app.include_router(indicators_router)
 app.include_router(module_router)
+app.include_router(function_router)
 app.include_router(level_router)
 
 

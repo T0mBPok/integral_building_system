@@ -9,7 +9,6 @@ router = APIRouter(prefix="/indicator", tags=["Работа с индикато�
 
 @router.get("/", response_model=list[GetIndicator])
 async def get_indicators(request: RBIndicator = Depends(), user=Depends(get_current_user)):
-    print(**request.to_dict())
     return await IndicatorLogic.get(**request.to_dict())
 
 @router.get("/{id}", response_model=GetIndicator)
@@ -20,8 +19,8 @@ async def get_indicator_by_id(id: str = Path(...), user=Depends(get_current_user
     return indicator
 
 @router.post("/", response_model=GetIndicator)
-async def add_indicator(data: AddIndicator = Depends(AddIndicator.as_form), user=Depends(get_current_user)):
-    return await IndicatorLogic.indicator_add(user, **data.to_dict())
+async def add_indicator(data: AddIndicator, user=Depends(get_current_user)):
+    return await IndicatorLogic.indicator_add(user, data.model_dump())
 
 @router.put("/{id}", response_model=GetIndicator)
 async def update_indicator(data: UpdateIndicator, id: str = Path(...), user=Depends(get_current_user)):

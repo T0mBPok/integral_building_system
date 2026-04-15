@@ -4,6 +4,7 @@ from src.function.rb import RBFunction
 from src.function.logic import FunctionLogic
 from src.user.dependencies import get_current_user
 
+
 router = APIRouter(prefix="/function", tags=["Работа с функциями"])
 
 @router.get("/", response_model=list[GetFunction])
@@ -30,3 +31,4 @@ async def update_function(data: UpdateFunction, id: str = Path(...), user=Depend
 async def delete_function(id: str = Path(...), user=Depends(get_current_user)):
     await FunctionLogic.delete(id=id)
     return {"message": f"Функция с id={id} успешно удалена"}
+

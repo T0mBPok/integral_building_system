@@ -14,9 +14,6 @@ class GetIndicator(BaseIndicator):
 class AddIndicator(BaseModel):
     name: str
     value: int
-    @classmethod
-    def as_form(cls, name: str, value: int):
-        return cls(name=name, value=value)
 
 class UpdateIndicator(MongoBaseModel):
     name: str | None = None

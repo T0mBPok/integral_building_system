@@ -4,7 +4,7 @@ from src.user.schemas import SUserRegister, SUserAuth, SUser
 from src.user.logic import UserLogic
 from src.user.dependencies import get_current_user
 
-router = APIRouter(prefix='/user', tags=['Auth'])
+router = APIRouter(prefix='/user', tags=['User'])
 
 @router.post('/register/', response_model=SUser)
 async def register_user(user_data: SUserRegister):
