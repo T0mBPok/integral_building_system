@@ -5,6 +5,7 @@ import router from './router'
 // глобальные стили
 import './assets/styles/main.css'
 import './assets/styles/dashboard.css'
+import './assets/styles/workspace.css'
 
 const app = createApp(App)
 

@@ -1,266 +1,83 @@
 <template>
   <div class="project-board">
-    <header class="board-topbar">
-      <div class="topbar-left">
-        <button class="icon-button" title="К списку проектов" @click="goToProjects">←</button>
-        <div class="project-title-block">
-          <input
-            v-model="projectDraft.name"
-            class="project-title-input"
-            :disabled="isBusy"
-            placeholder="Новый проект"
-            @change="saveProjectMeta"
-          />
-          <input
-            v-model="projectDraft.description"
-            class="project-description-input"
-            :disabled="isBusy"
-            placeholder="Описание проекта"
-            @change="saveProjectMeta"
-          />
-        </div>
-      </div>
-
-      <div class="topbar-actions">
-        <button class="toolbar-button" @click="openIndicatorDialog" :disabled="!project?.id || isBusy">
-          + Показатели
-        </button>
-        <button class="toolbar-button subtle" @click="loadProject" :disabled="!project?.id || isBusy">
-          Обновить
-        </button>
-        <button class="toolbar-button primary" @click="calculateProject" :disabled="!canCalculate || isBusy">
-          Рассчитать
-        </button>
-      </div>
-    </header>
+    <BoardTopbar
+      v-model:project-draft="projectDraft"
+      :project-id="project?.id"
+      :is-busy="isBusy"
+      @back="goToProjects"
+      @reload="loadProject"
+      @save="saveProjectMeta"
+    />
 
     <div class="board-shell">
-      <aside class="left-rail">
-        <button
-          v-for="section in sections"
-          :key="section.id"
-          class="rail-button"
-          :class="{ active: selectedSection === section.id }"
-          :title="section.title"
-          @click="selectSection(section.id)"
-        >
-          <span class="rail-icon">{{ section.icon }}</span>
-          <span>{{ section.short }}</span>
-        </button>
-      </aside>
-
       <main class="board-canvas-wrap" ref="canvasWrapper">
-        <div class="board-canvas" ref="canvas" :style="canvasStyle">
-          <section class="flow-column base-column">
-            <div class="column-heading">
-              <span>Базовые показатели</span>
-              <button class="mini-button" @click="openIndicatorDialog" :disabled="!project?.id">+</button>
-            </div>
-            <article
-              v-for="indicator in projectIndicators"
-              :key="indicator.indicator_id"
-              class="flow-node base-node"
-              :class="{ selected: selectedNodeId === indicator.indicator_id }"
-              @click="selectNode('base', indicator.indicator_id)"
-            >
-              <div class="node-kicker">Файл</div>
-              <h3>{{ indicator.name }}</h3>
-              <p>{{ indicator.description || 'Без описания' }}</p>
-            </article>
-            <div v-if="projectIndicators.length === 0" class="empty-node" @click="openIndicatorDialog">
-              Добавьте показатели из загруженных файлов
-            </div>
-          </section>
+        <ProjectTree
+          ref="canvas"
+          :canvas-style="canvasStyle"
+          :selected-node-id="selectedNodeId"
+          :integral-title="integralTitle"
+          :result-summary="resultSummary"
+          :last-result="lastResult"
+          :weight-method="weightMethod"
+          :weight-methods="weightMethods"
+          :effective-weights="effectiveWeights"
+          :normalization-settings="normalizationSettings"
+          :normalization-methods="normalizationMethods"
+          :project-indicators="projectIndicators"
+          :method-label="methodLabel"
+          :format-number="formatNumber"
+          @select-node="selectNode"
+          @open-indicators="openIndicatorDialog"
+        />
 
-          <section class="flow-column">
-            <div class="column-heading">
-              <span>Нормализация</span>
-            </div>
-            <article
-              v-for="entry in normalizationSettings"
-              :key="entry.indicator_name"
-              class="flow-node norm-node"
-              :class="{ selected: selectedNodeId === `norm:${entry.indicator_name}` }"
-              @click="selectNode('normalization', `norm:${entry.indicator_name}`)"
-            >
-              <div class="node-kicker">{{ methodLabel(entry.method, normalizationMethods) }}</div>
-              <h3>{{ entry.output_name || entry.indicator_name }}</h3>
-              <p>{{ entry.indicator_name }}</p>
-            </article>
-          </section>
+        <BottomToolPanel
+          v-model:bulk-normalization-method="bulkNormalizationMethod"
+          v-model:weight-method="weightMethod"
+          v-model:calculation-year="calculationYear"
+          :normalization-methods="normalizationMethods"
+          :weight-methods="weightMethods"
+          :aggregation-method="aggregationMethod"
+          :project-id="project?.id"
+          :is-busy="isBusy"
+          :can-calculate="canCalculate"
+          :zoom-label="zoomLabel"
+          @apply-normalization="applyBulkNormalization"
+          @open-indicators="openIndicatorDialog"
+          @calculate="calculateProject"
+          @zoom="setZoom"
+          @fit="fitToView"
+        />
 
-          <section class="flow-column">
-            <div class="column-heading">
-              <span>Весовые коэффициенты</span>
-            </div>
-            <article class="flow-node weight-node" :class="{ selected: selectedSection === 'weights' }" @click="selectSection('weights')">
-              <div class="node-kicker">{{ methodLabel(weightMethod, weightMethods) }}</div>
-              <h3>Веса показателей</h3>
-              <div class="weight-stack">
-                <span v-for="weight in effectiveWeights" :key="weight.indicator_name">
-                  {{ weight.indicator_name }} · {{ formatNumber(weight.weight) }}
-                </span>
-              </div>
-            </article>
-          </section>
-
-          <section class="flow-column">
-            <div class="column-heading">
-              <span>Свертка</span>
-            </div>
-            <article class="flow-node aggregate-node" :class="{ selected: selectedSection === 'aggregate' }" @click="selectSection('aggregate')">
-              <div class="node-kicker">sum</div>
-              <h3>Интегральный показатель</h3>
-              <p>{{ resultSummary }}</p>
-            </article>
-            <article v-if="lastResult?.ranking?.length" class="result-card">
-              <div class="result-card-title">Рейтинг</div>
-              <ol>
-                <li v-for="item in lastResult.ranking.slice(0, 5)" :key="item.region">
-                  <span>{{ item.region }}</span>
-                  <strong>{{ formatNumber(item.value) }}</strong>
-                </li>
-              </ol>
-            </article>
-          </section>
-        </div>
+        <FloatingSettingsPanels
+          v-model:manual-weights="manualWeights"
+          v-model:normalization-settings="normalizationSettings"
+          :weight-method="weightMethod"
+          :normalization-methods="normalizationMethods"
+          :status-message="statusMessage"
+          :status-tone="statusTone"
+        />
       </main>
-
-      <aside class="right-panel">
-        <div class="panel-header">
-          <span>{{ activePanelTitle }}</span>
-          <small>{{ zoomLabel }}</small>
-        </div>
-
-        <div v-if="statusMessage" class="status-message" :class="statusTone">{{ statusMessage }}</div>
-
-        <section v-if="selectedSection === 'base'" class="panel-section">
-          <div class="section-title">Показатели проекта</div>
-          <button class="wide-button" @click="openIndicatorDialog" :disabled="!project?.id">Добавить из файлов</button>
-          <div class="compact-list">
-            <div v-for="indicator in projectIndicators" :key="indicator.indicator_id" class="compact-row">
-              <div>
-                <strong>{{ indicator.name }}</strong>
-                <span>{{ indicator.description || 'Базовый показатель' }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-else-if="selectedSection === 'normalization'" class="panel-section">
-          <div class="section-title">Методы нормализации</div>
-          <div v-for="entry in normalizationSettings" :key="entry.indicator_name" class="settings-card">
-            <label>{{ entry.indicator_name }}</label>
-            <select v-model="entry.method">
-              <option v-for="method in normalizationMethods" :key="method.value" :value="method.value">
-                {{ method.label }}
-              </option>
-            </select>
-            <input v-model="entry.output_name" placeholder="Название после нормализации" />
-          </div>
-        </section>
-
-        <section v-else-if="selectedSection === 'weights'" class="panel-section">
-          <div class="section-title">Расчет весов</div>
-          <div class="segmented">
-            <button
-              v-for="method in weightMethods"
-              :key="method.value"
-              :class="{ active: weightMethod === method.value }"
-              @click="weightMethod = method.value"
-            >
-              {{ method.label }}
-            </button>
-          </div>
-          <div v-if="weightMethod === 'manual'" class="settings-card">
-            <div v-for="weight in manualWeights" :key="weight.indicator_name" class="weight-input-row">
-              <label>{{ weight.indicator_name }}</label>
-              <input v-model.number="weight.weight" type="number" min="0" step="0.01" />
-            </div>
-          </div>
-          <div class="compact-list">
-            <div v-for="weight in effectiveWeights" :key="weight.indicator_name" class="compact-row">
-              <span>{{ weight.indicator_name }}</span>
-              <strong>{{ formatNumber(weight.weight) }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section v-else class="panel-section">
-          <div class="section-title">Свертка</div>
-          <div class="settings-card">
-            <label>Метод агрегации</label>
-            <select v-model="aggregationMethod" disabled>
-              <option value="sum">Аддитивная сумма</option>
-            </select>
-            <label>Год расчета</label>
-            <input v-model="calculationYear" placeholder="Например, 2024" />
-          </div>
-          <button class="wide-button primary" @click="calculateProject" :disabled="!canCalculate || isBusy">
-            Рассчитать интегральный показатель
-          </button>
-          <div v-if="lastResult?.integral_values?.length" class="compact-list">
-            <div v-for="item in lastResult.integral_values" :key="item.region" class="compact-row">
-              <span>{{ item.region }}</span>
-              <strong>{{ formatNumber(item.value) }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <div class="panel-footer">
-          <button class="icon-button" title="Уменьшить" @click="setZoom(-0.1)">−</button>
-          <button class="icon-button" title="По размеру" @click="fitToView">□</button>
-          <button class="icon-button" title="Увеличить" @click="setZoom(0.1)">+</button>
-        </div>
-      </aside>
     </div>
 
-    <div v-if="indicatorDialogOpen" class="modal-backdrop" @click.self="indicatorDialogOpen = false">
-      <section class="indicator-modal">
-        <div class="modal-header">
-          <div>
-            <h2>Показатели из файлов</h2>
-            <p>Выберите загруженные таблицы или добавьте новый файл</p>
-          </div>
-          <button class="icon-button" title="Закрыть" @click="indicatorDialogOpen = false">×</button>
-        </div>
-
-        <div class="upload-strip">
-          <input ref="fileInput" type="file" accept=".csv,.xls,.xlsx" @change="handleFileUpload" />
-          <input v-model="uploadName" placeholder="Название показателя" />
-          <button class="toolbar-button" @click="uploadSelectedFile" :disabled="!selectedFile || !uploadName || isBusy">
-            Загрузить
-          </button>
-        </div>
-
-        <div class="indicator-picker">
-          <label
-            v-for="indicator in availableIndicators"
-            :key="indicator.id"
-            class="indicator-option"
-            :class="{ checked: selectedIndicatorIds.includes(indicator.id), attached: attachedIndicatorIds.has(indicator.id) }"
-          >
-            <input
-              type="checkbox"
-              :value="indicator.id"
-              v-model="selectedIndicatorIds"
-              :disabled="attachedIndicatorIds.has(indicator.id)"
-            />
-            <div>
-              <strong>{{ indicator.name }}</strong>
-              <span>{{ indicator.source_file_name || indicator.description || 'Ручной показатель' }}</span>
-            </div>
-          </label>
-        </div>
-
-        <div class="modal-actions">
-          <button class="toolbar-button subtle" @click="indicatorDialogOpen = false">Отмена</button>
-          <button class="toolbar-button primary" @click="attachSelectedIndicators" :disabled="selectedIndicatorIds.length === 0 || isBusy">
-            Добавить выбранные
-          </button>
-        </div>
-      </section>
-    </div>
+    <IndicatorDialog
+      v-model:selected-indicator-ids="selectedIndicatorIds"
+      v-model:upload-name="uploadName"
+      v-model:selected-years="selectedFileYears"
+      :open="indicatorDialogOpen"
+      :available-indicators="availableIndicators"
+      :indicator-files="indicatorFiles"
+      :selected-file-id="selectedIndicatorFileId"
+      :attached-indicator-ids="attachedIndicatorIds"
+      :selected-file="selectedFile"
+      :file-preview="selectedIndicatorFile"
+      :is-busy="isBusy"
+      @close="indicatorDialogOpen = false"
+      @select-file="selectIndicatorFile"
+      @file-change="handleFileUpload"
+      @upload="storeSelectedFile"
+      @extract="extractSelectedYearsAndAttach"
+      @attach="attachSelectedIndicators"
+    />
   </div>
 </template>
 
@@ -268,6 +85,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
+import BoardTopbar from './dashboard/BoardTopbar.vue'
+import BottomToolPanel from './dashboard/BottomToolPanel.vue'
+import FloatingSettingsPanels from './dashboard/FloatingSettingsPanels.vue'
+import IndicatorDialog from './dashboard/IndicatorDialog.vue'
+import ProjectTree from './dashboard/ProjectTree.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -283,8 +105,10 @@ const transformStart = ref({ x: 0, y: 0 })
 const project = ref(null)
 const projectDraft = ref({ name: 'Новый проект', description: '' })
 const availableIndicators = ref([])
+const indicatorFiles = ref([])
 const selectedIndicatorIds = ref([])
-const selectedSection = ref('base')
+const selectedIndicatorFileId = ref('')
+const selectedFileYears = ref([])
 const selectedNodeId = ref(null)
 const indicatorDialogOpen = ref(false)
 const isBusy = ref(false)
@@ -295,15 +119,9 @@ const uploadName = ref('')
 const calculationYear = ref('')
 const aggregationMethod = ref('sum')
 const weightMethod = ref('equal')
+const bulkNormalizationMethod = ref('minmax')
 const normalizationSettings = ref([])
 const manualWeights = ref([])
-
-const sections = [
-  { id: 'base', title: 'Базовые показатели', short: 'База', icon: 'B' },
-  { id: 'normalization', title: 'Нормализация', short: 'Норма', icon: 'N' },
-  { id: 'weights', title: 'Весовые коэффициенты', short: 'Веса', icon: 'W' },
-  { id: 'aggregate', title: 'Свертка', short: 'Итог', icon: 'Σ' }
-]
 
 const normalizationMethods = [
   { value: 'minmax', label: 'Min-Max' },
@@ -324,9 +142,10 @@ const projectId = computed(() => route.params.id || route.query.projectId || pro
 const projectIndicators = computed(() => project.value?.indicators || [])
 const lastResult = computed(() => project.value?.last_result)
 const attachedIndicatorIds = computed(() => new Set(projectIndicators.value.map((indicator) => indicator.indicator_id)))
+const selectedIndicatorFile = computed(() => indicatorFiles.value.find((file) => file.id === selectedIndicatorFileId.value) || { sheets: [], years: [] })
 const canCalculate = computed(() => Boolean(project.value?.id && projectIndicators.value.length > 0))
 const zoomLabel = computed(() => `${Math.round(canvasScale.value * 100)}%`)
-const activePanelTitle = computed(() => sections.find((section) => section.id === selectedSection.value)?.title || 'Проект')
+const integralTitle = computed(() => project.value?.name ? `ИП: ${project.value.name}` : 'ИП проекта')
 const resultSummary = computed(() => {
   if (!lastResult.value?.integral_values?.length) return 'Расчет еще не выполнен'
   return `${lastResult.value.integral_values.length} объектов, ${lastResult.value.year}`
@@ -426,6 +245,21 @@ async function loadIndicators() {
   }
 }
 
+async function loadIndicatorFiles() {
+  try {
+    const { data } = await api.get('/indicator/files/')
+    indicatorFiles.value = data
+    if (data.length && !data.some((file) => file.id === selectedIndicatorFileId.value)) {
+      selectIndicatorFile(data[0].id)
+    } else if (!data.length) {
+      selectedIndicatorFileId.value = ''
+      selectedFileYears.value = []
+    }
+  } catch (error) {
+    showStatus(errorMessage(error), 'danger')
+  }
+}
+
 async function saveProjectMeta() {
   if (!project.value?.id) {
     await createProjectIfNeeded()
@@ -449,7 +283,9 @@ async function saveProjectMeta() {
 async function openIndicatorDialog() {
   await createProjectIfNeeded()
   await loadIndicators()
+  await loadIndicatorFiles()
   selectedIndicatorIds.value = []
+  selectedFileYears.value = selectedIndicatorFile.value?.years ? [...selectedIndicatorFile.value.years] : []
   indicatorDialogOpen.value = true
 }
 
@@ -461,19 +297,51 @@ function handleFileUpload(event) {
   }
 }
 
-async function uploadSelectedFile() {
+function selectIndicatorFile(fileId) {
+  selectedIndicatorFileId.value = fileId
+  const file = indicatorFiles.value.find((item) => item.id === fileId)
+  selectedFileYears.value = file?.years ? [...file.years] : []
+}
+
+async function storeSelectedFile() {
   if (!selectedFile.value || !uploadName.value) return
   isBusy.value = true
   try {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('name', uploadName.value)
-    const { data } = await api.post('/indicator/upload', formData)
-    availableIndicators.value.unshift(data)
-    selectedIndicatorIds.value = [data.id]
+    const { data } = await api.post('/indicator/files/', formData)
+    indicatorFiles.value.unshift(data)
+    selectIndicatorFile(data.id)
     selectedFile.value = null
     uploadName.value = ''
-    showStatus('Файл загружен', 'success')
+    showStatus('Файл сохранен, выберите годы для добавления', 'success')
+  } catch (error) {
+    showStatus(errorMessage(error), 'danger')
+  } finally {
+    isBusy.value = false
+  }
+}
+
+async function extractSelectedYearsAndAttach() {
+  await createProjectIfNeeded()
+  if (!selectedIndicatorFileId.value || selectedFileYears.value.length === 0) return
+  isBusy.value = true
+  try {
+    const file = selectedIndicatorFile.value
+    const { data } = await api.post(`/indicator/files/${selectedIndicatorFileId.value}/extract`, {
+      name: file.name,
+      years: selectedFileYears.value
+    })
+    availableIndicators.value.unshift(...data.indicators)
+    let updatedProject = project.value
+    for (const indicator of data.indicators) {
+      const response = await api.post(`/project/${project.value.id}/indicators`, { indicator_id: indicator.id })
+      updatedProject = response.data
+    }
+    project.value = updatedProject
+    indicatorDialogOpen.value = false
+    showStatus(`Добавлено показателей из годов: ${data.created_count}`, 'success')
   } catch (error) {
     showStatus(errorMessage(error), 'danger')
   } finally {
@@ -537,6 +405,13 @@ function syncCalculationSettings() {
   syncManualWeights()
 }
 
+function applyBulkNormalization() {
+  normalizationSettings.value = normalizationSettings.value.map((entry) => ({
+    ...entry,
+    method: bulkNormalizationMethod.value
+  }))
+}
+
 function syncManualWeights() {
   const previous = new Map(manualWeights.value.map((entry) => [entry.indicator_name, entry.weight]))
   const count = normalizationSettings.value.length || 1
@@ -546,13 +421,7 @@ function syncManualWeights() {
   }))
 }
 
-function selectSection(sectionId) {
-  selectedSection.value = sectionId
-  selectedNodeId.value = null
-}
-
 function selectNode(sectionId, nodeId) {
-  selectedSection.value = sectionId
   selectedNodeId.value = nodeId
 }
 
@@ -585,7 +454,7 @@ function setZoom(delta) {
 async function fitToView() {
   await nextTick()
   const wrapper = canvasWrapper.value
-  const content = canvas.value
+  const content = canvas.value?.$el || canvas.value
   if (!wrapper || !content) return
   const scale = Math.min(1, (wrapper.clientWidth - 48) / Math.max(content.scrollWidth, 1))
   canvasScale.value = Math.max(0.65, scale)

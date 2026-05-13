@@ -46,8 +46,9 @@ async def init_db():
     client = AsyncMongoClient(get_mongo_uri())
     db = client.get_default_database()
     await _deduplicate_collection_by_user_and_name(db, "indicators")
+    await _deduplicate_collection_by_user_and_name(db, "indicator_files")
     await _deduplicate_collection_by_user_and_name(db, "projects")
     await init_beanie(
         database=db,
-        document_models=[User, Project, Level, Module, Function, Indicator]
+        document_models=[User, Project, Level, Module, Function, Indicator, IndicatorFile]
     )

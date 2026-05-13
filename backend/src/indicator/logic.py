@@ -8,8 +8,8 @@ import pandas as pd
 from beanie import PydanticObjectId
 from fastapi import HTTPException, UploadFile, status
 
-from src.indicator.model import Indicator, IndicatorTable
-from src.indicator.schemas import CreateIndicator, IndicatorTableSchema, UpdateIndicator
+from src.indicator.model import Indicator, IndicatorFile, IndicatorFileSheet, IndicatorTable
+from src.indicator.schemas import CreateIndicator, ExtractIndicatorsRequest, IndicatorTableSchema, UpdateIndicator
 from src.user.model import User
 
 
@@ -17,6 +17,25 @@ class IndicatorLogic:
     @staticmethod
     async def list_for_user(user: User) -> list[Indicator]:
         return await Indicator.find(Indicator.user.id == user.id).sort("name").to_list()
+
+    @staticmethod
+    async def list_files_for_user(user: User) -> list[IndicatorFile]:
+        return await IndicatorFile.find(IndicatorFile.user.id == user.id).sort("-created_at").to_list()
+
+    @staticmethod
+    async def get_file_for_user(user: User, file_id: str) -> IndicatorFile:
+        try:
+            object_id = PydanticObjectId(file_id)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден") from exc
+
+        indicator_file = await IndicatorFile.find_one(
+            IndicatorFile.id == object_id,
+            IndicatorFile.user.id == user.id,
+        )
+        if indicator_file is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+        return indicator_file
 
     @staticmethod
     async def get_for_user(user: User, indicator_id: str) -> Indicator:
@@ -62,6 +81,136 @@ class IndicatorLogic:
             source_sheet_name=sheet_name,
         )
         return await cls._insert_indicator(payload)
+
+    @classmethod
+    async def upload_many(
+        cls,
+        user: User,
+        file: UploadFile,
+        name: str,
+        description: str | None = None,
+        split_by_year: bool = False,
+        years: list[str] | None = None,
+    ) -> list[Indicator]:
+        tables = await cls._read_tables(file=file)
+        indicators: list[Indicator] = []
+        multiple_tables = len(tables) > 1
+        for table_name, table in tables:
+            if split_by_year:
+                year_tables = cls._split_table_by_year(table, years)
+            else:
+                year_tables = [(None, table)]
+
+            for year, year_table in year_tables:
+                indicator_name = cls._build_uploaded_indicator_name(
+                    base_name=name,
+                    sheet_name=table_name if multiple_tables else None,
+                    year=year,
+                )
+                payload = Indicator(
+                    user=user,
+                    name=indicator_name,
+                    description=description,
+                    table=IndicatorTable(**year_table.model_dump()),
+                    source_file_name=file.filename,
+                    source_sheet_name=table_name,
+                )
+                indicators.append(await cls._insert_indicator(payload))
+        return indicators
+
+    @classmethod
+    async def upload_file(
+        cls,
+        user: User,
+        file: UploadFile,
+        name: str,
+        description: str | None = None,
+    ) -> IndicatorFile:
+        tables = await cls._read_tables(file=file)
+        indicator_file = IndicatorFile(
+            user=user,
+            name=name,
+            description=description,
+            original_file_name=file.filename,
+            sheets=[
+                IndicatorFileSheet(
+                    name=sheet_name,
+                    table=IndicatorTable(**table.model_dump()),
+                )
+                for sheet_name, table in tables
+            ],
+        )
+        try:
+            await indicator_file.insert()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        return indicator_file
+
+    @classmethod
+    async def extract_from_file(
+        cls,
+        user: User,
+        file_id: str,
+        payload: ExtractIndicatorsRequest,
+    ) -> list[Indicator]:
+        indicator_file = await cls.get_file_for_user(user, file_id)
+        years = [str(year).strip() for year in payload.years if str(year).strip()]
+        if not years:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Выберите хотя бы один год",
+            )
+
+        selected_sheets = [
+            sheet for sheet in indicator_file.sheets
+            if payload.sheet_name is None or sheet.name == payload.sheet_name
+        ]
+        if not selected_sheets:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Лист файла не найден",
+            )
+
+        indicators: list[Indicator] = []
+        multiple_tables = len(indicator_file.sheets) > 1 and payload.sheet_name is None
+        for sheet in selected_sheets:
+            table = IndicatorTableSchema.model_validate(sheet.table)
+            for year, year_table in cls._split_table_by_year(table, years):
+                indicator_name = cls._build_uploaded_indicator_name(
+                    base_name=payload.name or indicator_file.name,
+                    sheet_name=sheet.name if multiple_tables else None,
+                    year=year,
+                )
+                indicator = Indicator(
+                    user=user,
+                    name=indicator_name,
+                    description=payload.description or indicator_file.description,
+                    table=IndicatorTable(**year_table.model_dump()),
+                    source_file_name=indicator_file.original_file_name or indicator_file.name,
+                    source_sheet_name=sheet.name,
+                )
+                indicators.append(await cls._insert_indicator(indicator))
+        return indicators
+
+    @staticmethod
+    async def delete_file_for_user(user: User, file_id: str) -> None:
+        indicator_file = await IndicatorLogic.get_file_for_user(user, file_id)
+        await indicator_file.delete()
+
+    @classmethod
+    async def preview_file(cls, file: UploadFile):
+        tables = await cls._read_tables(file=file)
+        return [
+            {
+                "name": table_name,
+                "years": table.years,
+                "region_count": len(table.regions),
+            }
+            for table_name, table in tables
+        ]
 
     @staticmethod
     async def update_for_user(user: User, indicator_id: str, payload: UpdateIndicator) -> Indicator:
@@ -115,6 +264,14 @@ class IndicatorLogic:
 
     @staticmethod
     async def _read_table(file: UploadFile, sheet_name: str | None = None) -> IndicatorTableSchema:
+        tables = await IndicatorLogic._read_tables(file=file, sheet_name=sheet_name)
+        return tables[0][1]
+
+    @staticmethod
+    async def _read_tables(
+        file: UploadFile,
+        sheet_name: str | None = None,
+    ) -> list[tuple[str | None, IndicatorTableSchema]]:
         extension = Path(file.filename or "").suffix.lower()
         content = await file.read()
         if not content:
@@ -122,9 +279,17 @@ class IndicatorLogic:
 
         try:
             if extension in {".xls", ".xlsx"}:
-                data_frame = pd.read_excel(BytesIO(content), sheet_name=sheet_name or 0, header=None)
+                if sheet_name:
+                    data_frame = pd.read_excel(BytesIO(content), sheet_name=sheet_name, header=None)
+                    return [(sheet_name, IndicatorLogic._dataframe_to_table(data_frame))]
+                sheets = pd.read_excel(BytesIO(content), sheet_name=None, header=None)
+                return [
+                    (str(sheet), IndicatorLogic._dataframe_to_table(data_frame))
+                    for sheet, data_frame in sheets.items()
+                ]
             elif extension == ".csv":
                 data_frame = pd.read_csv(StringIO(content.decode("utf-8")), header=None)
+                return [(None, IndicatorLogic._dataframe_to_table(data_frame))]
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -132,6 +297,7 @@ class IndicatorLogic:
                 )
         except UnicodeDecodeError:
             data_frame = pd.read_csv(StringIO(content.decode("cp1251")), header=None)
+            return [(None, IndicatorLogic._dataframe_to_table(data_frame))]
         except HTTPException:
             raise
         except Exception as exc:
@@ -139,8 +305,6 @@ class IndicatorLogic:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Не удалось прочитать файл: {exc}",
             ) from exc
-
-        return IndicatorLogic._dataframe_to_table(data_frame)
 
     @staticmethod
     def _dataframe_to_table(data_frame: pd.DataFrame) -> IndicatorTableSchema:
@@ -172,3 +336,44 @@ class IndicatorLogic:
             )
 
         return IndicatorTableSchema(regions=regions, years=years, values=values)
+
+    @staticmethod
+    def _split_table_by_year(
+        table: IndicatorTableSchema,
+        selected_years: list[str] | None = None,
+    ) -> list[tuple[str, IndicatorTableSchema]]:
+        years_to_export = selected_years or table.years
+        missing_years = [year for year in years_to_export if year not in table.years]
+        if missing_years:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"В файле нет годов: {', '.join(missing_years)}",
+            )
+
+        result: list[tuple[str, IndicatorTableSchema]] = []
+        for year in years_to_export:
+            year_index = table.years.index(year)
+            result.append(
+                (
+                    year,
+                    IndicatorTableSchema(
+                        regions=table.regions,
+                        years=[year],
+                        values=[[row[year_index]] for row in table.values],
+                    ),
+                )
+            )
+        return result
+
+    @staticmethod
+    def _build_uploaded_indicator_name(
+        base_name: str,
+        sheet_name: str | None = None,
+        year: str | None = None,
+    ) -> str:
+        parts = [base_name]
+        if sheet_name:
+            parts.append(sheet_name)
+        if year:
+            parts.append(year)
+        return ": ".join(parts)

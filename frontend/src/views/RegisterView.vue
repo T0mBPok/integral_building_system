@@ -27,7 +27,7 @@ async function handleRegister(data) {
 onMounted(async () => {
   try{
     const response = await api.get('/user/check/')
-    if (response.data.ok) router.push('/')
+    if (response.data.ok) router.push('/projects')
   } catch (error) {
     console.error("Вы не авторизированы!", error)
   }

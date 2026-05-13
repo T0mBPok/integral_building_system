@@ -17,7 +17,7 @@ async function handleLogin(data) {
   try {
     const res = await api.post('/user/login/', data)
 
-    router.push('/')
+    router.push(router.currentRoute.value.query.redirect || '/projects')
   } catch (err) {
     console.error('Ошибка логина:', err)
   }
@@ -26,7 +26,7 @@ async function handleLogin(data) {
 onMounted(async () => {
   try {
     const response = await api.get('/user/check/')
-    if (response.data.ok) router.push('/')
+    if (response.data.ok) router.push('/projects')
   } catch (error) {
     console.error("Вы не авторизированы!", error)
   }
