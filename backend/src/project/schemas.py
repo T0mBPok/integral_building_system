@@ -69,6 +69,7 @@ class ProjectCalculatedIndicatorSchema(BaseModel):
 class ProjectCalculationResultSchema(BaseModel):
     year: str
     normalized_indicators: list[ProjectCalculatedIndicatorSchema] = Field(default_factory=list)
+    weight_method: str = "equal"
     weights: list[ProjectWeightEntrySchema] = Field(default_factory=list)
     weighted_components: list[ProjectCalculatedIndicatorSchema] = Field(default_factory=list)
     integral_values: list[ProjectRegionValueSchema] = Field(default_factory=list)
@@ -87,6 +88,7 @@ class BaseProject(MongoBaseModel):
     custom_indicators: list[ProjectCustomIndicatorSchema] = Field(default_factory=list)
     normalization_settings: list[ProjectNormalizationEntrySchema] = Field(default_factory=list)
     weight_settings: list[ProjectWeightEntrySchema] = Field(default_factory=list)
+    weight_method: str = "equal"
     calculation_year: str | None = None
     aggregation_method: str = "sum"
     last_result: ProjectCalculationResultSchema | None = None
@@ -106,6 +108,7 @@ class AddProject(BaseModel):
     custom_indicators: list[ProjectCustomIndicatorSchema] = Field(default_factory=list)
     normalization_settings: list[ProjectNormalizationEntrySchema] = Field(default_factory=list)
     weight_settings: list[ProjectWeightEntrySchema] = Field(default_factory=list)
+    weight_method: str = "equal"
     calculation_year: str | None = None
     aggregation_method: str = "sum"
 
@@ -117,6 +120,7 @@ class UpdateProject(BaseModel):
     custom_indicators: list[ProjectCustomIndicatorSchema] | None = None
     normalization_settings: list[ProjectNormalizationEntrySchema] | None = None
     weight_settings: list[ProjectWeightEntrySchema] | None = None
+    weight_method: str | None = None
     calculation_year: str | None = None
     aggregation_method: str | None = None
 
@@ -125,6 +129,7 @@ class ProjectCalculateRequest(BaseModel):
     year: str | None = None
     normalization_settings: list[ProjectNormalizationEntrySchema] | None = None
     weight_settings: list[ProjectWeightEntrySchema] | None = None
+    weight_method: str | None = None
 
 
 class ProjectIndicatorAttachRequest(BaseModel):

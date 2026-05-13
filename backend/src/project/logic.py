@@ -6,6 +6,7 @@ from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from src.indicator.logic import IndicatorLogic
+from src.math_part.program_math.weight_indicator import WeightedIndicator
 from src.project.calculation_service import ProjectCalculationService
 from src.project.model import Project, ProjectIndicatorRef
 from src.project.schemas import (
@@ -18,6 +19,8 @@ from src.user.model import User
 
 
 class ProjectLogic:
+    SUPPORTED_WEIGHT_METHODS = WeightedIndicator.SUPPORTED_WEIGHT_METHODS
+
     @staticmethod
     async def list_for_user(user: User) -> list[Project]:
         return await Project.find(Project.user.id == user.id).sort("name").to_list()
@@ -40,13 +43,14 @@ class ProjectLogic:
     @classmethod
     async def create_for_user(cls, user: User, payload: AddProject) -> Project:
         cls._validate_aggregation_method(payload.aggregation_method)
+        cls._validate_weight_method(payload.weight_method)
         indicator_ids = [item.indicator_id for item in payload.indicators]
         if indicator_ids:
             await IndicatorLogic.get_many_for_user(user, indicator_ids)
 
         project = Project(
             user=user,
-            **payload.model_dump(),
+            **(payload.model_dump() | {"weight_method": payload.weight_method.lower()}),
         )
         return await cls._insert_project(project)
 
@@ -56,6 +60,9 @@ class ProjectLogic:
         updates = payload.model_dump(exclude_unset=True)
         if "aggregation_method" in updates:
             cls._validate_aggregation_method(updates["aggregation_method"])
+        if "weight_method" in updates:
+            cls._validate_weight_method(updates["weight_method"])
+            updates["weight_method"] = updates["weight_method"].lower()
 
         if "indicators" in updates:
             indicator_ids = [item["indicator_id"] for item in updates["indicators"]]
@@ -105,6 +112,7 @@ class ProjectLogic:
         payload: ProjectCalculateRequest,
     ) -> Project:
         project = await cls.get_for_user(user, project_id)
+        cls._validate_weight_method(payload.weight_method)
         source_indicators = await IndicatorLogic.get_many_for_user(
             user,
             [item.indicator_id for item in project.indicators],
@@ -115,6 +123,7 @@ class ProjectLogic:
             year=payload.year,
             normalization_settings=payload.normalization_settings,
             weight_settings=payload.weight_settings,
+            weight_method=payload.weight_method,
         )
         if payload.year is not None:
             project.calculation_year = payload.year
@@ -122,6 +131,8 @@ class ProjectLogic:
             project.normalization_settings = payload.normalization_settings
         if payload.weight_settings is not None:
             project.weight_settings = payload.weight_settings
+        if payload.weight_method is not None:
+            project.weight_method = payload.weight_method.lower()
         project.last_result = result
         project.aggregation_method = "sum"
         project.updated_at = datetime.now(timezone.utc)
@@ -152,4 +163,16 @@ class ProjectLogic:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Сейчас поддерживается только аддитивная свертка aggregation_method='sum'",
+            )
+
+    @classmethod
+    def _validate_weight_method(cls, weight_method: str | None) -> None:
+        if weight_method is None:
+            return
+        normalized_method = weight_method.lower()
+        if normalized_method not in cls.SUPPORTED_WEIGHT_METHODS:
+            available = ", ".join(sorted(cls.SUPPORTED_WEIGHT_METHODS))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Метод весов '{weight_method}' не поддерживается. Доступные: {available}",
             )

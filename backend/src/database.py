@@ -1,4 +1,4 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from src.config import get_mongo_uri
 from src.models_registry import *
@@ -17,7 +17,8 @@ async def _deduplicate_collection_by_user_and_name(db, collection_name: str) -> 
         {"$match": {"count": {"$gt": 1}}},
     ]
 
-    async for duplicate in collection.aggregate(pipeline):
+    duplicates = await collection.aggregate(pipeline)
+    async for duplicate in duplicates:
         ids = duplicate["ids"]
         base_name = duplicate["_id"].get("name") or "unnamed"
 
@@ -42,7 +43,7 @@ async def _deduplicate_collection_by_user_and_name(db, collection_name: str) -> 
 
 
 async def init_db():
-    client = AsyncIOMotorClient(get_mongo_uri())
+    client = AsyncMongoClient(get_mongo_uri())
     db = client.get_default_database()
     await _deduplicate_collection_by_user_and_name(db, "indicators")
     await _deduplicate_collection_by_user_and_name(db, "projects")

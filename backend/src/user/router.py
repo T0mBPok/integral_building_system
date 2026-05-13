@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Path, Response, HTTPException
 from fastapi.responses import JSONResponse
+from bson import ObjectId
 from src.config import get_cookie_settings
 from src.user.schemas import SUserRegister, SUserAuth, SUser
 from src.user.logic import UserLogic
@@ -13,13 +14,6 @@ async def register_user(user_data: SUserRegister):
 
 @router.get('/me/', response_model=SUser)
 async def get_user(user: SUser = Depends(get_current_user)):
-    return user
-
-@router.get("/{id}", response_model=SUser, summary="Get user by id")
-async def get_user_by_id(id: str = Path(..., description="User id")):
-    user = await UserLogic.get_by_id(id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     return user
 
 @router.get('/list/', response_model=list[SUser])
@@ -53,3 +47,14 @@ async def check_user(user: SUser = Depends(get_current_user)):
 async def logout_user(response: Response):
     response.delete_cookie(key='access_user_token')
     return {'message': "Пользователь успешно вышел из системы!"}
+
+@router.get("/{id}", response_model=SUser, summary="Get user by id")
+async def get_user_by_id(id: str = Path(..., description="User id")):
+    try:
+        user_id = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = await UserLogic.get_one_or_none_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user

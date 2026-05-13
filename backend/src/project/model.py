@@ -45,6 +45,7 @@ class ProjectCalculatedIndicator(BaseModel):
 class ProjectCalculationResult(BaseModel):
     year: str
     normalized_indicators: list[ProjectCalculatedIndicator] = Field(default_factory=list)
+    weight_method: str = "equal"
     weights: list[ProjectWeightEntry] = Field(default_factory=list)
     weighted_components: list[ProjectCalculatedIndicator] = Field(default_factory=list)
     integral_values: list[ProjectRegionValue] = Field(default_factory=list)
@@ -56,11 +57,12 @@ class ProjectCalculationResult(BaseModel):
 class Project(Document):
     user: Link[User]
     name: str
-    description: str
+    description: str = ''
     indicators: list[ProjectIndicatorRef] = Field(default_factory=list)
     custom_indicators: list[ProjectCustomIndicator] = Field(default_factory=list)
     normalization_settings: list[ProjectNormalizationEntry] = Field(default_factory=list)
     weight_settings: list[ProjectWeightEntry] = Field(default_factory=list)
+    weight_method: str = "equal"
     calculation_year: str | None = None
     aggregation_method: str = "sum"
     last_result: ProjectCalculationResult | None = None

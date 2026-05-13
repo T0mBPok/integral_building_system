@@ -17,14 +17,18 @@ async function handleLogin(data) {
   try {
     const res = await api.post('/user/login/', data)
 
-    router.push('/chat')
+    router.push('/')
   } catch (err) {
     console.error('Ошибка логина:', err)
   }
 }
 
 onMounted(async () => {
-  const response = await api.get('/user/check/')
-  if (response.data.ok) router.push('/chat')
+  try {
+    const response = await api.get('/user/check/')
+    if (response.data.ok) router.push('/')
+  } catch (error) {
+    console.error("Вы не авторизированы!", error)
+  }
 })
 </script>

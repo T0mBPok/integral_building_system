@@ -27,6 +27,7 @@ from src.project.model import (
 @dataclass
 class PreparedWeights:
     year: str
+    method: str
     weights: list[ProjectWeightEntry]
     mapping: dict[str, float]
 
@@ -40,6 +41,7 @@ class ProjectCalculationService:
         year: str | None = None,
         normalization_settings: list[ProjectNormalizationEntry] | None = None,
         weight_settings: list[ProjectWeightEntry] | None = None,
+        weight_method: str | None = None,
     ) -> ProjectCalculationResult:
         try:
             base_cube = cls._build_base_cube(project, source_indicators)
@@ -55,6 +57,8 @@ class ProjectCalculationService:
                 years=normalized_cube.years,
                 year=year,
                 weight_settings=weight_settings,
+                weight_method=weight_method,
+                normalized_cube=normalized_cube,
             )
             weighted_indicator = WeightedIndicator(prepared_weights.mapping)
             weighted_indicator_name = "weighted_project_indicator"
@@ -73,6 +77,7 @@ class ProjectCalculationService:
                     cls._cube_indicator_to_model(normalized_cube, spec.output_name or spec.indicator_name)
                     for spec in normalized_specs
                 ],
+                weight_method=prepared_weights.method,
                 weights=prepared_weights.weights,
                 weighted_components=cls._weighted_components_to_models(
                     weighted_indicator=weighted_indicator,
@@ -168,6 +173,8 @@ class ProjectCalculationService:
         years: list[str],
         year: str | None = None,
         weight_settings: list[ProjectWeightEntry] | None = None,
+        weight_method: str | None = None,
+        normalized_cube: NormalizedIndicator | None = None,
     ) -> PreparedWeights:
         target_year = year or project.calculation_year
         if not target_year:
@@ -179,17 +186,35 @@ class ProjectCalculationService:
             target_year = cls._sort_labels(years)[0]
 
         entries = weight_settings
-        if entries is None:
+        if entries is None and weight_method is None:
             entries = project.weight_settings
 
-        if not entries:
-            default_weight = 1 / len(normalized_indicator_names)
-            entries = [
-                ProjectWeightEntry(indicator_name=name, weight=default_weight)
-                for name in normalized_indicator_names
-            ]
+        selected_method = (weight_method or project.weight_method or "equal").lower()
 
-        mapping = {entry.indicator_name: entry.weight for entry in entries}
+        if entries:
+            selected_method = "manual"
+            mapping = cls._normalize_weight_mapping({entry.indicator_name: entry.weight for entry in entries})
+        elif selected_method in {"equal", "manual"}:
+            default_weight = 1 / len(normalized_indicator_names)
+            mapping = {name: default_weight for name in normalized_indicator_names}
+        else:
+            if normalized_cube is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Не удалось рассчитать автоматические веса: нет нормализованных данных",
+                )
+            mapping = WeightedIndicator.calculate_weights(
+                cube=normalized_cube,
+                year=target_year,
+                method=selected_method,
+            )
+
+        if target_year not in years:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Год {target_year} отсутствует в нормализованных данных",
+            )
+
         missing = [name for name in normalized_indicator_names if name not in mapping]
         extra = [name for name in mapping if name not in normalized_indicator_names]
         if missing or extra:
@@ -203,18 +228,41 @@ class ProjectCalculationService:
                 detail="; ".join(details),
             )
 
-        if target_year not in years:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Год {target_year} отсутствует в нормализованных данных",
-            )
-
         ordered_entries = [
             ProjectWeightEntry(indicator_name=name, weight=float(mapping[name]))
             for name in normalized_indicator_names
         ]
         ordered_mapping = {entry.indicator_name: entry.weight for entry in ordered_entries}
-        return PreparedWeights(year=target_year, weights=ordered_entries, mapping=ordered_mapping)
+        return PreparedWeights(
+            year=target_year,
+            method=selected_method,
+            weights=ordered_entries,
+            mapping=ordered_mapping,
+        )
+
+    @staticmethod
+    def _normalize_weight_mapping(mapping: dict[str, float]) -> dict[str, float]:
+        weights = np.asarray(list(mapping.values()), dtype=float)
+        if np.any(~np.isfinite(weights)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Веса должны быть конечными числами",
+            )
+        if np.any(weights < 0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Веса не могут быть отрицательными",
+            )
+        total = float(np.sum(weights))
+        if total <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Сумма весов должна быть больше 0",
+            )
+        return {
+            indicator_name: float(weight / total)
+            for indicator_name, weight in zip(mapping.keys(), weights)
+        }
 
     @classmethod
     def _indicator_to_formatted_data(cls, indicator: Indicator):
