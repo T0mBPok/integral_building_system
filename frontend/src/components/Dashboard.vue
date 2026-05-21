@@ -9,8 +9,8 @@
       @save="saveProjectMeta"
     />
 
-    <div class="board-shell">
-      <main class="board-canvas-wrap" ref="canvasWrapper">
+    <div class="board-shell" :class="{ 'has-side-panel': selectedPanelNode }">
+      <main class="board-canvas-wrap" ref="canvasWrapper" @click.self="clearSelectedNode">
         <ProjectTree
           ref="canvas"
           :canvas-style="canvasStyle"
@@ -24,6 +24,9 @@
           :normalization-settings="normalizationSettings"
           :normalization-methods="normalizationMethods"
           :project-indicators="projectIndicators"
+          :available-indicators="availableIndicators"
+          :calculation-year="calculationYear"
+          :custom-indicators="customIndicators"
           :method-label="methodLabel"
           :format-number="formatNumber"
           @select-node="selectNode"
@@ -31,38 +34,50 @@
         />
 
         <BottomToolPanel
-          v-model:bulk-normalization-method="bulkNormalizationMethod"
-          v-model:weight-method="weightMethod"
-          v-model:calculation-year="calculationYear"
-          :normalization-methods="normalizationMethods"
-          :weight-methods="weightMethods"
-          :aggregation-method="aggregationMethod"
           :project-id="project?.id"
           :is-busy="isBusy"
           :can-calculate="canCalculate"
           :zoom-label="zoomLabel"
-          @apply-normalization="applyBulkNormalization"
           @open-indicators="openIndicatorDialog"
+          @open-function="openFunctionDialog"
           @calculate="calculateProject"
           @zoom="setZoom"
           @fit="fitToView"
         />
-
-        <FloatingSettingsPanels
-          v-model:manual-weights="manualWeights"
-          v-model:normalization-settings="normalizationSettings"
-          :weight-method="weightMethod"
-          :normalization-methods="normalizationMethods"
-          :status-message="statusMessage"
-          :status-tone="statusTone"
-        />
       </main>
+
+      <FloatingSettingsPanels
+        v-if="selectedPanelNode"
+        v-model:manual-weights="manualWeights"
+        v-model:normalization-settings="normalizationSettings"
+        v-model:bulk-normalization-method="bulkNormalizationMethod"
+        v-model:weight-method="weightMethod"
+        v-model:calculation-year="calculationYear"
+        :weight-methods="weightMethods"
+        :weight-method="weightMethod"
+        :normalization-methods="normalizationMethods"
+        :aggregation-method="aggregationMethod"
+        :selected-node="selectedPanelNode"
+        :effective-weights="effectiveWeights"
+        :project-indicators="projectIndicators"
+        :custom-indicators="customIndicators"
+        :available-indicators="availableIndicators"
+        :last-result="lastResult"
+        :method-label="methodLabel"
+        :format-number="formatNumber"
+        :status-message="statusMessage"
+        :status-tone="statusTone"
+        @close="clearSelectedNode"
+        @apply-normalization="applyBulkNormalization"
+        @save-function="saveFunctionFromPanel"
+      />
     </div>
 
     <IndicatorDialog
       v-model:selected-indicator-ids="selectedIndicatorIds"
       v-model:upload-name="uploadName"
       v-model:selected-years="selectedFileYears"
+      v-model:indicator-names="selectedFileIndicatorNames"
       :open="indicatorDialogOpen"
       :available-indicators="availableIndicators"
       :indicator-files="indicatorFiles"
@@ -78,6 +93,15 @@
       @extract="extractSelectedYearsAndAttach"
       @attach="attachSelectedIndicators"
     />
+
+    <FunctionDialog
+      v-model:draft="functionDraft"
+      :open="functionDialogOpen"
+      :project-indicators="projectIndicators"
+      :is-busy="isBusy"
+      @close="functionDialogOpen = false"
+      @save="saveFunction"
+    />
   </div>
 </template>
 
@@ -88,6 +112,7 @@ import api from '../services/api'
 import BoardTopbar from './dashboard/BoardTopbar.vue'
 import BottomToolPanel from './dashboard/BottomToolPanel.vue'
 import FloatingSettingsPanels from './dashboard/FloatingSettingsPanels.vue'
+import FunctionDialog from './dashboard/FunctionDialog.vue'
 import IndicatorDialog from './dashboard/IndicatorDialog.vue'
 import ProjectTree from './dashboard/ProjectTree.vue'
 
@@ -109,8 +134,11 @@ const indicatorFiles = ref([])
 const selectedIndicatorIds = ref([])
 const selectedIndicatorFileId = ref('')
 const selectedFileYears = ref([])
+const selectedFileIndicatorNames = ref({})
 const selectedNodeId = ref(null)
 const indicatorDialogOpen = ref(false)
+const functionDialogOpen = ref(false)
+const functionDraft = ref({ name: '', description: '', formula: '' })
 const isBusy = ref(false)
 const statusMessage = ref('')
 const statusTone = ref('neutral')
@@ -125,7 +153,17 @@ const manualWeights = ref([])
 
 const normalizationMethods = [
   { value: 'minmax', label: 'Min-Max' },
+  { value: 'abs-minmax', label: 'ABS Min-Max' },
+  { value: 'linear', label: 'Линейная' },
+  { value: 'rank', label: 'Ранжирование' },
   { value: 'z-score', label: 'Z-score' },
+  { value: 'threshold', label: 'Пороговая' },
+  { value: 'cyclic', label: 'Циклическая' },
+  { value: 'proportional', label: 'Пропорциональная' },
+  { value: 'boxcox', label: 'Box-Cox' },
+  { value: 'yeo-johnson', label: 'Yeo-Johnson' },
+  { value: 'log', label: 'Log' },
+  { value: 'quantile', label: 'Квантильная' },
   { value: 'robust', label: 'Robust' }
 ]
 
@@ -140,6 +178,7 @@ const weightMethods = [
 
 const projectId = computed(() => route.params.id || route.query.projectId || project.value?.id)
 const projectIndicators = computed(() => project.value?.indicators || [])
+const customIndicators = computed(() => project.value?.custom_indicators || [])
 const lastResult = computed(() => project.value?.last_result)
 const attachedIndicatorIds = computed(() => new Set(projectIndicators.value.map((indicator) => indicator.indicator_id)))
 const selectedIndicatorFile = computed(() => indicatorFiles.value.find((file) => file.id === selectedIndicatorFileId.value) || { sheets: [], years: [] })
@@ -167,6 +206,69 @@ const canvasStyle = computed(() => ({
   transform: `translate(${canvasTransform.value.x}px, ${canvasTransform.value.y}px) scale(${canvasScale.value})`
 }))
 
+const selectedPanelNode = computed(() => {
+  if (!selectedNodeId.value) return null
+  if (selectedNodeId.value === 'aggregate') {
+    return {
+      type: 'aggregate',
+      title: integralTitle.value,
+      subtitle: 'Интегральный показатель'
+    }
+  }
+  if (selectedNodeId.value === 'weights') {
+    return {
+      type: 'weights',
+      title: 'Расчет весов',
+      subtitle: methodLabel(weightMethod.value, weightMethods)
+    }
+  }
+  if (selectedNodeId.value.startsWith('weight:')) {
+    const indicatorName = selectedNodeId.value.slice(7)
+    const entry = normalizationSettings.value.find((item) => item.indicator_name === indicatorName)
+    if (!entry) return null
+    const outputName = entry.output_name || entry.indicator_name
+    return {
+      type: 'weight',
+      title: outputName,
+      subtitle: 'Весовой компонент',
+      entry,
+      weight: effectiveWeights.value.find((item) => item.indicator_name === outputName)
+    }
+  }
+  if (selectedNodeId.value.startsWith('norm:')) {
+    const indicatorName = selectedNodeId.value.slice(5)
+    const entry = normalizationSettings.value.find((item) => item.indicator_name === indicatorName)
+    if (!entry) return null
+    return {
+      type: 'normalization',
+      title: entry.output_name || entry.indicator_name,
+      subtitle: entry.indicator_name,
+      entry
+    }
+  }
+  if (selectedNodeId.value.startsWith('func:')) {
+    const name = selectedNodeId.value.slice(5)
+    const func = customIndicators.value.find((item) => item.name === name)
+    if (!func) return null
+    return {
+      type: 'function',
+      title: func.name,
+      subtitle: 'Функция',
+      func
+    }
+  }
+  const indicator = projectIndicators.value.find((item) => item.indicator_id === selectedNodeId.value)
+  if (!indicator) return null
+  const sourceIndicator = availableIndicators.value.find((item) => item.id === indicator.indicator_id)
+  return {
+    type: 'base',
+    title: indicator.name,
+    subtitle: indicator.description || 'Базовый показатель',
+    indicator,
+    sourceIndicator
+  }
+})
+
 watch(projectIndicators, () => {
   syncCalculationSettings()
   nextTick(fitToView)
@@ -174,6 +276,10 @@ watch(projectIndicators, () => {
 
 watch(weightMethod, (method) => {
   if (method === 'manual') syncManualWeights()
+})
+
+watch(selectedFileYears, () => {
+  syncDefaultIndicatorNames()
 })
 
 onMounted(async () => {
@@ -251,9 +357,10 @@ async function loadIndicatorFiles() {
     indicatorFiles.value = data
     if (data.length && !data.some((file) => file.id === selectedIndicatorFileId.value)) {
       selectIndicatorFile(data[0].id)
-    } else if (!data.length) {
+  } else if (!data.length) {
       selectedIndicatorFileId.value = ''
       selectedFileYears.value = []
+      selectedFileIndicatorNames.value = {}
     }
   } catch (error) {
     showStatus(errorMessage(error), 'danger')
@@ -301,6 +408,49 @@ function selectIndicatorFile(fileId) {
   selectedIndicatorFileId.value = fileId
   const file = indicatorFiles.value.find((item) => item.id === fileId)
   selectedFileYears.value = file?.years ? [...file.years] : []
+  syncDefaultIndicatorNames()
+}
+
+function openFunctionDialog() {
+  functionDraft.value = { name: `Функция ${customIndicators.value.length + 1}`, description: '', formula: '' }
+  functionDialogOpen.value = true
+}
+
+async function saveFunction() {
+  if (!project.value?.id || !functionDraft.value.name || !functionDraft.value.formula) return
+  const nextFunctions = [
+    ...customIndicators.value.filter((item) => item.name !== functionDraft.value.name),
+    {
+      name: functionDraft.value.name,
+      description: functionDraft.value.description || null,
+      formula: functionDraft.value.formula
+    }
+  ]
+  await updateProjectFunctions(nextFunctions)
+  functionDialogOpen.value = false
+}
+
+async function saveFunctionFromPanel(func) {
+  const nextFunctions = customIndicators.value.map((item) => (
+    item.name === func.originalName ? { name: func.name, description: func.description || null, formula: func.formula } : item
+  ))
+  await updateProjectFunctions(nextFunctions)
+}
+
+async function updateProjectFunctions(nextFunctions) {
+  isBusy.value = true
+  try {
+    const { data } = await api.put(`/project/${project.value.id}`, {
+      custom_indicators: nextFunctions
+    })
+    project.value = data
+    syncCalculationSettings()
+    showStatus('Функция сохранена', 'success')
+  } catch (error) {
+    showStatus(errorMessage(error), 'danger')
+  } finally {
+    isBusy.value = false
+  }
 }
 
 async function storeSelectedFile() {
@@ -331,7 +481,11 @@ async function extractSelectedYearsAndAttach() {
     const file = selectedIndicatorFile.value
     const { data } = await api.post(`/indicator/files/${selectedIndicatorFileId.value}/extract`, {
       name: file.name,
-      years: selectedFileYears.value
+      years: selectedFileYears.value,
+      indicator_names: selectedFileYears.value.reduce((names, year, index) => {
+        names[year] = selectedFileIndicatorNames.value[year]?.trim() || `Показатель ${index + 1}`
+        return names
+      }, {})
     })
     availableIndicators.value.unshift(...data.indicators)
     let updatedProject = project.value
@@ -394,15 +548,27 @@ async function calculateProject() {
 
 function syncCalculationSettings() {
   const existingNorm = new Map(normalizationSettings.value.map((entry) => [entry.indicator_name, entry]))
-  normalizationSettings.value = projectIndicators.value.map((indicator) => {
-    const previous = existingNorm.get(indicator.name)
+  const names = [
+    ...projectIndicators.value.map((indicator) => indicator.name),
+    ...customIndicators.value.map((indicator) => indicator.name)
+  ]
+  normalizationSettings.value = names.map((name) => {
+    const previous = existingNorm.get(name)
     return {
-      indicator_name: indicator.name,
+      indicator_name: name,
       method: previous?.method || 'minmax',
-      output_name: previous?.output_name || indicator.name
+      output_name: previous?.output_name || name
     }
   })
   syncManualWeights()
+}
+
+function syncDefaultIndicatorNames() {
+  const previous = selectedFileIndicatorNames.value
+  selectedFileIndicatorNames.value = selectedFileYears.value.reduce((names, year, index) => {
+    names[year] = previous[year] || `Показатель ${index + 1}`
+    return names
+  }, {})
 }
 
 function applyBulkNormalization() {
@@ -423,6 +589,10 @@ function syncManualWeights() {
 
 function selectNode(sectionId, nodeId) {
   selectedNodeId.value = nodeId
+}
+
+function clearSelectedNode() {
+  selectedNodeId.value = null
 }
 
 function goToProjects() {
@@ -448,7 +618,7 @@ function formatNumber(value) {
 }
 
 function setZoom(delta) {
-  canvasScale.value = Math.max(0.5, Math.min(1.8, canvasScale.value + delta))
+  canvasScale.value = Math.max(0.25, Math.min(1.8, canvasScale.value + delta))
 }
 
 async function fitToView() {
@@ -457,7 +627,7 @@ async function fitToView() {
   const content = canvas.value?.$el || canvas.value
   if (!wrapper || !content) return
   const scale = Math.min(1, (wrapper.clientWidth - 48) / Math.max(content.scrollWidth, 1))
-  canvasScale.value = Math.max(0.65, scale)
+  canvasScale.value = Math.max(0.25, scale)
   canvasTransform.value = { x: 24, y: 24 }
 }
 

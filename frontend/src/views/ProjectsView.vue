@@ -17,7 +17,6 @@
         <p>{{ project.description || 'Описание не задано' }}</p>
         <div class="card-meta">
           <span>{{ project.indicators?.length || 0 }} показателей</span>
-          <span>{{ project.last_result?.year || project.calculation_year || 'год не выбран' }}</span>
         </div>
       </article>
 

@@ -15,33 +15,23 @@
 
 <script setup>
 import { ref } from 'vue'
-import api from '../services/api'
-import { useRouter } from 'vue-router'
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
 
-const router = useRouter()
+const emit = defineEmits(['submit'])
 
 async function onSubmit() {
   error.value = ''
-  try {
-    const res = await api.post('/user/login/', {
-      email: email.value,
-      password: password.value
-    })
-
-    // Если сервер вернул ok === true, переходим в чат
-    if (res.data.ok) {
-      router.push('/chat')
-    } else {
-      error.value = 'Неверные данные для авторизации'
-    }
-  } catch (e) {
-    console.error(e)
+  if (!email.value || !password.value) {
     error.value = 'Неверные данные для авторизации'
+    return
   }
+  emit('submit', {
+    email: email.value,
+    password: password.value
+  })
 }
 </script>
 

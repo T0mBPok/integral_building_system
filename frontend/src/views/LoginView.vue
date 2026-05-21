@@ -15,9 +15,10 @@ const router = useRouter()
 
 async function handleLogin(data) {
   try {
-    const res = await api.post('/user/login/', data)
-
-    router.push(router.currentRoute.value.query.redirect || '/projects')
+    const { data: response } = await api.post('/user/login/', data)
+    if (response.ok) {
+      router.replace(router.currentRoute.value.query.redirect || '/projects')
+    }
   } catch (err) {
     console.error('Ошибка логина:', err)
   }

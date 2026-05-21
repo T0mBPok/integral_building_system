@@ -17,71 +17,83 @@
         </button>
       </div>
 
-      <div class="indicator-file-list">
-        <button
-          v-for="file in indicatorFiles"
-          :key="file.id"
-          type="button"
-          class="indicator-file-option"
-          :class="{ active: file.id === selectedFileId }"
-          @click="$emit('select-file', file.id)"
-        >
-          <strong>{{ file.name }}</strong>
-          <span>{{ file.original_file_name || 'Загруженный файл' }} · {{ file.years.length }} годов</span>
-        </button>
-        <div v-if="indicatorFiles.length === 0" class="empty-list compact">
-          Сначала загрузите файл на странице файлов или прямо здесь
-        </div>
-      </div>
-
-      <div v-if="filePreview.years?.length" class="dialog-year-picker">
-        <div class="year-picker-header">
-          <strong>Какие годы добавить как показатели</strong>
-          <button type="button" @click="$emit('update:selectedYears', [...filePreview.years])">Все</button>
-          <button type="button" @click="$emit('update:selectedYears', [])">Снять</button>
-        </div>
-        <label v-for="year in filePreview.years" :key="year">
-          <input
-            type="checkbox"
-            :value="year"
-            :checked="selectedYears.includes(year)"
-            @change="toggleYear(year, $event.target.checked)"
-          />
-          {{ year }}
-        </label>
-        <button class="toolbar-button primary extract-button" @click="$emit('extract')" :disabled="!selectedFileId || selectedYears.length === 0 || isBusy">
-          Добавить выбранные годы в проект
-        </button>
-      </div>
-
-      <div class="indicator-picker">
-        <div class="year-picker-header">
-          <strong>Уже созданные показатели</strong>
-        </div>
-        <label
-          v-for="indicator in availableIndicators"
-          :key="indicator.id"
-          class="indicator-option"
-          :class="{ checked: selectedIndicatorIds.includes(indicator.id), attached: attachedIndicatorIds.has(indicator.id) }"
-        >
-          <input
-            type="checkbox"
-            :value="indicator.id"
-            :checked="selectedIndicatorIds.includes(indicator.id)"
-            :disabled="attachedIndicatorIds.has(indicator.id)"
-            @change="toggleIndicator(indicator.id, $event.target.checked)"
-          />
-          <div>
-            <strong>{{ indicator.name }}</strong>
-            <span>{{ indicator.source_file_name || indicator.description || 'Ручной показатель' }}</span>
+      <div class="modal-scroll">
+        <div class="indicator-file-list">
+          <button
+            v-for="file in indicatorFiles"
+            :key="file.id"
+            type="button"
+            class="indicator-file-option"
+            :class="{ active: file.id === selectedFileId }"
+            @click="$emit('select-file', file.id)"
+          >
+            <strong>{{ file.name }}</strong>
+            <span>{{ file.original_file_name || 'Загруженный файл' }} · {{ file.years.length }} годов</span>
+          </button>
+          <div v-if="indicatorFiles.length === 0" class="empty-list compact">
+            Сначала загрузите файл на странице файлов или прямо здесь
           </div>
-        </label>
+        </div>
+
+        <div v-if="filePreview.years?.length" class="dialog-year-picker">
+          <div class="year-picker-header">
+            <strong>Какие годы добавить как показатели</strong>
+            <button type="button" @click="$emit('update:selectedYears', [...filePreview.years])">Все</button>
+            <button type="button" @click="$emit('update:selectedYears', [])">Снять</button>
+          </div>
+          <label v-for="year in filePreview.years" :key="year">
+            <input
+              type="checkbox"
+              :value="year"
+              :checked="selectedYears.includes(year)"
+              @change="toggleYear(year, $event.target.checked)"
+            />
+            {{ year }}
+          </label>
+          <div v-if="selectedYears.length" class="indicator-name-grid">
+            <label v-for="(year, index) in selectedYears" :key="`name:${year}`">
+              <span>{{ year }}</span>
+              <input
+                :value="indicatorNames[year] || `Показатель ${index + 1}`"
+                :placeholder="`Показатель ${index + 1}`"
+                @input="updateIndicatorName(year, $event.target.value)"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="indicator-picker">
+          <div class="year-picker-header">
+            <strong>Уже созданные показатели</strong>
+          </div>
+          <label
+            v-for="indicator in availableIndicators"
+            :key="indicator.id"
+            class="indicator-option"
+            :class="{ checked: selectedIndicatorIds.includes(indicator.id), attached: attachedIndicatorIds.has(indicator.id) }"
+          >
+            <input
+              type="checkbox"
+              :value="indicator.id"
+              :checked="selectedIndicatorIds.includes(indicator.id)"
+              :disabled="attachedIndicatorIds.has(indicator.id)"
+              @change="toggleIndicator(indicator.id, $event.target.checked)"
+            />
+            <div>
+              <strong>{{ indicator.name }}</strong>
+              <span>{{ indicator.source_file_name || indicator.description || 'Ручной показатель' }}</span>
+            </div>
+          </label>
+        </div>
       </div>
 
       <div class="modal-actions">
         <button class="toolbar-button subtle" @click="$emit('close')">Отмена</button>
+        <button class="toolbar-button primary" @click="$emit('extract')" :disabled="!selectedFileId || selectedYears.length === 0 || isBusy">
+          Добавить годы
+        </button>
         <button class="toolbar-button primary" @click="$emit('attach')" :disabled="selectedIndicatorIds.length === 0 || isBusy">
-          Добавить выбранные
+          Добавить готовые
         </button>
       </div>
     </section>
@@ -100,6 +112,7 @@ const props = defineProps({
   selectedFile: { type: Object, default: null },
   filePreview: { type: Object, default: () => ({ sheets: [], years: [] }) },
   selectedYears: { type: Array, default: () => [] },
+  indicatorNames: { type: Object, default: () => ({}) },
   isBusy: { type: Boolean, default: false }
 })
 
@@ -112,7 +125,8 @@ const emit = defineEmits([
   'attach',
   'update:uploadName',
   'update:selectedIndicatorIds',
-  'update:selectedYears'
+  'update:selectedYears',
+  'update:indicatorNames'
 ])
 
 function toggleIndicator(indicatorId, checked) {
@@ -129,5 +143,12 @@ function toggleYear(year, checked) {
     return
   }
   emit('update:selectedYears', props.selectedYears.filter((item) => item !== year))
+}
+
+function updateIndicatorName(year, value) {
+  emit('update:indicatorNames', {
+    ...props.indicatorNames,
+    [year]: value
+  })
 }
 </script>
