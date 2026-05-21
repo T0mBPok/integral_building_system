@@ -44,7 +44,7 @@ class ProjectCalculationService:
         weight_method: str | None = None,
     ) -> ProjectCalculationResult:
         try:
-            base_cube = cls._build_base_cube(project, source_indicators)
+            base_cube = cls._build_base_cube(project, source_indicators, calculation_year=year)
             cls._sort_cube_axes(base_cube)
             normalized_cube, normalized_specs = cls._normalize_cube(
                 project=project,
@@ -70,9 +70,14 @@ class ProjectCalculationService:
 
             weighted_matrix = weighted_indicator.get_weighted_table(weighted_indicator_name)
             integral_values = np.sum(weighted_matrix, axis=0)
+            integral_value = cls._to_float(np.nanmean(integral_values))
 
             return ProjectCalculationResult(
                 year=prepared_weights.year,
+                base_indicators=[
+                    cls._cube_indicator_to_model(base_cube, indicator_name)
+                    for indicator_name in base_cube.indicators
+                ],
                 normalized_indicators=[
                     cls._cube_indicator_to_model(normalized_cube, spec.output_name or spec.indicator_name)
                     for spec in normalized_specs
@@ -83,6 +88,7 @@ class ProjectCalculationService:
                     weighted_indicator=weighted_indicator,
                     weighted_indicator_name=weighted_indicator_name,
                 ),
+                integral_value=integral_value,
                 integral_values=cls._region_values(
                     regions=normalized_cube.regions,
                     values=integral_values,
@@ -101,7 +107,12 @@ class ProjectCalculationService:
             ) from exc
 
     @classmethod
-    def _build_base_cube(cls, project: Project, source_indicators: list[Indicator]) -> BaseIndicator:
+    def _build_base_cube(
+        cls,
+        project: Project,
+        source_indicators: list[Indicator],
+        calculation_year: str | None = None,
+    ) -> BaseIndicator:
         if not project.indicators:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,6 +121,16 @@ class ProjectCalculationService:
 
         indicators_by_id = {str(indicator.id): indicator for indicator in source_indicators}
         refs = project.indicators
+        referenced_sources = [
+            indicators_by_id.get(ref.indicator_id)
+            for ref in refs
+            if indicators_by_id.get(ref.indicator_id) is not None
+        ]
+        common_year = cls._common_year_for_single_year_indicators(
+            project=project,
+            source_indicators=referenced_sources,
+            calculation_year=calculation_year,
+        )
 
         cube: BaseIndicator | None = None
         for index, ref in enumerate(refs):
@@ -119,7 +140,7 @@ class ProjectCalculationService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Показатель с id={ref.indicator_id} не найден",
                 )
-            formatted = cls._indicator_to_formatted_data(source)
+            formatted = cls._indicator_to_formatted_data(source, common_year=common_year)
             if index == 0:
                 cube = BaseIndicator(formatted, ref.name)
             else:
@@ -265,13 +286,31 @@ class ProjectCalculationService:
         }
 
     @classmethod
-    def _indicator_to_formatted_data(cls, indicator: Indicator):
-        frame = cls._indicator_to_dataframe(indicator)
+    def _common_year_for_single_year_indicators(
+        cls,
+        project: Project,
+        source_indicators: list[Indicator],
+        calculation_year: str | None = None,
+    ) -> str | None:
+        if not source_indicators:
+            return None
+        if any(len(indicator.table.years) != 1 for indicator in source_indicators):
+            return None
+
+        single_years = [indicator.table.years[0] for indicator in source_indicators]
+        if len(set(single_years)) <= 1:
+            return None
+        return calculation_year or project.calculation_year or cls._sort_labels(single_years)[0]
+
+    @classmethod
+    def _indicator_to_formatted_data(cls, indicator: Indicator, common_year: str | None = None):
+        frame = cls._indicator_to_dataframe(indicator, common_year=common_year)
         return format_population_data(frame)
 
     @classmethod
-    def _indicator_to_dataframe(cls, indicator: Indicator) -> pd.DataFrame:
-        header = ["region"] + list(indicator.table.years)
+    def _indicator_to_dataframe(cls, indicator: Indicator, common_year: str | None = None) -> pd.DataFrame:
+        years = [common_year] if common_year and len(indicator.table.years) == 1 else list(indicator.table.years)
+        header = ["region"] + years
         rows = []
         for region, row_values in zip(indicator.table.regions, indicator.table.values):
             rows.append([region] + list(row_values))

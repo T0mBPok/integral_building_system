@@ -83,6 +83,7 @@ class ExtractIndicatorsRequest(BaseModel):
     description: str | None = None
     years: list[str] = Field(default_factory=list)
     sheet_name: str | None = None
+    indicator_names: dict[str, str] = Field(default_factory=dict)
 
 
 class IndicatorFilePreviewSheet(BaseModel):

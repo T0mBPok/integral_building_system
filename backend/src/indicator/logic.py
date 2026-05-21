@@ -176,14 +176,12 @@ class IndicatorLogic:
 
         indicators: list[Indicator] = []
         multiple_tables = len(indicator_file.sheets) > 1 and payload.sheet_name is None
+        indicator_index = 1
         for sheet in selected_sheets:
             table = IndicatorTableSchema.model_validate(sheet.table)
             for year, year_table in cls._split_table_by_year(table, years):
-                indicator_name = cls._build_uploaded_indicator_name(
-                    base_name=payload.name or indicator_file.name,
-                    sheet_name=sheet.name if multiple_tables else None,
-                    year=year,
-                )
+                custom_name = payload.indicator_names.get(year, "").strip()
+                indicator_name = custom_name or f"Показатель {indicator_index}"
                 indicator = Indicator(
                     user=user,
                     name=indicator_name,
@@ -192,7 +190,8 @@ class IndicatorLogic:
                     source_file_name=indicator_file.original_file_name or indicator_file.name,
                     source_sheet_name=sheet.name,
                 )
-                indicators.append(await cls._insert_indicator(indicator))
+                indicators.append(await cls._insert_indicator(indicator, ensure_unique_name=True))
+                indicator_index += 1
         return indicators
 
     @staticmethod
@@ -252,7 +251,9 @@ class IndicatorLogic:
         return indicators
 
     @staticmethod
-    async def _insert_indicator(indicator: Indicator) -> Indicator:
+    async def _insert_indicator(indicator: Indicator, ensure_unique_name: bool = False) -> Indicator:
+        if ensure_unique_name:
+            indicator.name = await IndicatorLogic._unique_indicator_name(indicator.user, indicator.name)
         try:
             await indicator.insert()
         except Exception as exc:
@@ -261,6 +262,27 @@ class IndicatorLogic:
                 detail=str(exc),
             ) from exc
         return indicator
+
+    @staticmethod
+    async def _unique_indicator_name(user: User, base_name: str) -> str:
+        candidate = base_name.strip() or "Показатель"
+        existing = await Indicator.find_one(
+            Indicator.user.id == user.id,
+            Indicator.name == candidate,
+        )
+        if existing is None:
+            return candidate
+
+        suffix = 2
+        while True:
+            candidate_with_suffix = f"{candidate} ({suffix})"
+            existing = await Indicator.find_one(
+                Indicator.user.id == user.id,
+                Indicator.name == candidate_with_suffix,
+            )
+            if existing is None:
+                return candidate_with_suffix
+            suffix += 1
 
     @staticmethod
     async def _read_table(file: UploadFile, sheet_name: str | None = None) -> IndicatorTableSchema:

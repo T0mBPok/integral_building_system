@@ -68,10 +68,12 @@ class ProjectCalculatedIndicatorSchema(BaseModel):
 
 class ProjectCalculationResultSchema(BaseModel):
     year: str
+    base_indicators: list[ProjectCalculatedIndicatorSchema] = Field(default_factory=list)
     normalized_indicators: list[ProjectCalculatedIndicatorSchema] = Field(default_factory=list)
     weight_method: str = "equal"
     weights: list[ProjectWeightEntrySchema] = Field(default_factory=list)
     weighted_components: list[ProjectCalculatedIndicatorSchema] = Field(default_factory=list)
+    integral_value: float | None = None
     integral_values: list[ProjectRegionValueSchema] = Field(default_factory=list)
     ranking: list[ProjectRegionValueSchema] = Field(default_factory=list)
     aggregation_method: str = "sum"

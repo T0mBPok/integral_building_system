@@ -35,6 +35,7 @@ async def auth_user(response: Response, user_data: SUserAuth):
         httponly=True,
         secure=cookie_settings["secure"],
         samesite=cookie_settings["samesite"],
+        path="/",
         max_age=3600
     )
     return res
@@ -45,7 +46,7 @@ async def check_user(user: SUser = Depends(get_current_user)):
 
 @router.post("/logout/")
 async def logout_user(response: Response):
-    response.delete_cookie(key='access_user_token')
+    response.delete_cookie(key='access_user_token', path="/")
     return {'message': "Пользователь успешно вышел из системы!"}
 
 @router.get("/{id}", response_model=SUser, summary="Get user by id")
